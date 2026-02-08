@@ -1,0 +1,55 @@
+Start rosbridge (ROS 2 example)
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+​
+Get the external rosbridge WebSocket URL
+rosbridge_address
+
+Send /move request 
+curl -X POST http://localhost:3000/move \
+  -H "Content-Type: application/json" \
+  -d '{"linear":0.2,"angular":0.5}'
+
+Send /stop request
+curl -X POST http://localhost:3000/stop
+
+
+
+Lancer un monde vide 
+
+export TURTLEBOT3_MODEL=burger
+ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+
+Lancer le SLAM
+ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True slam:=True
+
+Lancer exploration autonome
+ros2 launch explore_lite explore.launch.py
+
+
+Lancer la simu en local :
+
+export LIBGL_ALWAYS_SOFTWARE=1  
+export GZ_PARTITION=tbt_sim     
+
+source /opt/ros/humble/setup.bash
+ros2 launch turtlebot4_ignition_bringup turtlebot4_ignition.launch.py world:=maze
+
+
+serveur video 
+
+source /opt/ros/humble/setup.bash
+ros2 run web_video_server web_video_server
+
+Lancer tb3 :
+
+ssh ubuntu@ip
+mdp : turtlebot
+
+roscore
+roslaunch turtlebot3_bringup turtlebot3_robot.launch
+roslaunch rosbridge_server rosbridge_websocket.launch
+
+slam : 
+
+export TURTLEBOT3_MODEL=burger
+roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false
