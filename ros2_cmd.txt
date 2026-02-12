@@ -43,6 +43,7 @@ ros2 run web_video_server web_video_server
 Lancer tb3 :
 
 ssh ubuntu@ip
+ssh ubuntu@172.20.10.2
 mdp : turtlebot
 
 roscore

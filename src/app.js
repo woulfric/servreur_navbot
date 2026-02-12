@@ -6,7 +6,7 @@ const apiRoutes = require('./routes/apiRoutes');
 
 // Initialisation
 app.use(express.json());
-app.use(express.static('public')); // Servir le dossier public (Frontend)
+app.use(express.static('public'));
 
 // Connexion à ROS
 rosService.connect();

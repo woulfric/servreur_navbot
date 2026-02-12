@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>TB4 Cockpit - SSIO</title>
+    <title>TB4 Cockpit - Navigation</title>
+    
+    <script src="https://code.createjs.com/1.0.0/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0.10.0/build/ros2d.min.js"></script>
+
     <style>
         /* --- GLOBAL & LAYOUT --- */
         body { 
@@ -45,24 +51,14 @@
             background: #1a1a1a;
             position: relative;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .map-grid {
-            width: 100%; height: 100%;
-            background-image: 
-                linear-gradient(#333 1px, transparent 1px), 
-                linear-gradient(90deg, #333 1px, transparent 1px);
-            background-size: 50px 50px; 
-            opacity: 0.3;
-        }
-        .robot-marker {
-            width: 16px; height: 16px; 
-            background: #e74c3c; 
-            border: 2px solid white; 
-            border-radius: 50%; 
-            position: absolute; 
-            transform: translate(-50%, -50%); 
-            box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
-            transition: top 0.1s, left 0.1s;
+        
+        #ros-map-canvas {
+            width: 100%;
+            height: 100%;
         }
 
         /* --- RIGHT PANEL (CONTROLS) --- */
@@ -101,7 +97,7 @@
         .controls-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 70px); /* Hauteur des boutons */
+            grid-template-rows: repeat(2, 70px); 
             gap: 8px;
             margin-bottom: 20px;
         }
@@ -113,7 +109,6 @@
         }
         button:active { background: #555; transform: scale(0.96); border-color: #777; }
         
-        /* Positioning */
         .btn-up    { grid-column: 2; grid-row: 1; }
         .btn-left  { grid-column: 1; grid-row: 2; }
         .btn-down  { grid-column: 2; grid-row: 2; }
@@ -133,8 +128,18 @@
         .emergency-btn:hover { background: #d94e3e; }
         .emergency-btn.active { background: #27ae60; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3); }
 
-        /* UTILS */
         .blocked { opacity: 0.3; pointer-events: none; filter: grayscale(100%); }
+        
+        /* Loading overlay pour la map */
+        #map-loading {
+            position: absolute;
+            color: #00ffcc;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -145,10 +150,10 @@
             <div class="no-signal">WAITING FOR VIDEO STREAM...</div>
             <img id="cameraStream" class="video-feed" alt="" style="position: absolute; z-index: 2;" onerror="this.style.display='none'">
         </div>
+        
         <div class="map-container" id="mapContainer">
-            <div class="map-grid"></div>
-            <div id="robotIcon" class="robot-marker"></div>
-            <div style="position:absolute; bottom:10px; left:10px; font-size:10px; color:#555; font-family: monospace;">GRID SCALE: 1m</div>
+            <div id="map-loading">INITIALISATION MAP...</div>
+            <div id="ros-map-canvas"></div>
         </div>
     </div>
 
@@ -191,63 +196,141 @@
 
     <script>
         // --- CONFIG ---
-        const ROBOT_IP = window.location.hostname;
+        const ROBOT_IP_CAM = window.location.hostname; 
         const CAMERA_TOPIC = '/oakd/rgb/preview/image_raw'; 
         
         // --- VIDEO ---
-        const videoUrl = `http://${ROBOT_IP}:8080/stream?topic=${CAMERA_TOPIC}&type=mjpeg&quality=30`;
+        const videoUrl = `http://${ROBOT_IP_CAM}:8080/stream?topic=${CAMERA_TOPIC}&type=mjpeg&quality=30`;
         const img = document.getElementById('cameraStream');
         img.src = videoUrl;
-        // Auto-retry image loading if stream is not ready yet
         img.onerror = function() {
             setTimeout(() => { img.src = videoUrl; }, 2000);
         };
 
+        let ros = null;
+        let viewer = null;
+        let gridClient = null;
+        let robotMarker = null;
+
+        // --- DEMARRAGE AUTO : CHARGER LA DERNIERE MAP ---
+        async function initSystem() {
+            try {
+                const confRes = await fetch('/api/config');
+                const config = await confRes.json();
+                
+                let rosUrl = '';
+                if (config.ROSBRIDGE_URL) rosUrl = config.ROSBRIDGE_URL;
+                else if (config.robotIP) rosUrl = `ws://${config.robotIP}:${config.rosPort || '9090'}`;
+                else rosUrl = 'ws://' + window.location.hostname + ':9090';
+
+                document.getElementById('map-loading').innerText = "RECHERCHE MAP...";
+                const mapsRes = await fetch('/api/maps');
+                const mapsData = await mapsRes.json();
+
+                if(mapsData.status === 'success' && mapsData.maps.length > 0) {
+                    const lastMap = mapsData.maps.sort().pop();
+                    
+                    console.log("Chargement de la map :", lastMap);
+                    document.getElementById('map-loading').innerText = "CHARGEMENT: " + lastMap;
+
+                    await fetch('/api/load_map', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ mapName: lastMap })
+                    });
+                } else {
+                    document.getElementById('map-loading').innerText = "AUCUNE MAP TROUVÉE";
+                }
+
+                connectToRos(rosUrl);
+
+            } catch (e) {
+                console.error("Erreur init:", e);
+                document.getElementById('map-loading').innerText = "ERREUR CONNEXION";
+            }
+        }
+
+        function connectToRos(url) {
+            ros = new ROSLIB.Ros({ url: url });
+
+            ros.on('connection', () => {
+                console.log("Connecté à ROS");
+                document.getElementById('map-loading').innerText = "ROS CONNECTÉ - ATTENTE MAP...";
+                setupMapViewer();
+            });
+
+            ros.on('error', () => {
+                document.getElementById('map-loading').innerText = "ERREUR ROSBRIDGE";
+            });
+        }
+
+        function setupMapViewer() {
+            const container = document.getElementById('mapContainer');
+            
+            viewer = new ROS2D.Viewer({
+                divID: 'ros-map-canvas',
+                width: container.offsetWidth,
+                height: container.offsetHeight,
+                background: '#1a1a1a'
+            });
+
+            gridClient = new ROS2D.OccupancyGridClient({
+                ros: ros,
+                rootObject: viewer.scene,
+                continuous: false 
+            });
+
+            gridClient.on('change', () => {
+                document.getElementById('map-loading').style.display = 'none'; 
+                viewer.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
+                viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
+            });
+
+            // --- ROBOT MARKER (Triangle) ---
+            robotMarker = new ROS2D.NavigationArrow({
+                size: 25, strokeSize: 1, fillColor: createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
+            });
+            robotMarker.visible = false;
+            viewer.scene.addChild(robotMarker);
+
+            const odomListener = new ROSLIB.Topic({
+                ros: ros,
+                name: '/odom',
+                messageType: 'nav_msgs/Odometry'
+            });
+
+            odomListener.subscribe((pose) => {
+                robotMarker.x = pose.pose.pose.position.x;
+                robotMarker.y = pose.pose.pose.position.y;
+                
+                const q = pose.pose.pose.orientation;
+                const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+                const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+                const yaw = Math.atan2(siny_cosp, cosy_cosp);
+                
+                robotMarker.rotation = -yaw * (180.0 / Math.PI);
+                robotMarker.visible = true;
+
+                document.getElementById('posX').innerText = pose.pose.pose.position.x.toFixed(2);
+                document.getElementById('posY').innerText = pose.pose.pose.position.y.toFixed(2);
+            });
+            
+            const batListener = new ROSLIB.Topic({
+                ros: ros,
+                name: '/battery_state',
+                messageType: 'sensor_msgs/BatteryState'
+            });
+            batListener.subscribe((bat) => {
+                document.getElementById('batVal').innerText = (bat.percentage * 100).toFixed(0);
+            });
+        }
+
+        initSystem();
+
+
         let interval = null;
         let isEmergency = false;
 
-        // --- MAP DYNAMIC ---
-        const SCALE = 50; // 1m = 50px
-
-        function updateMap(x, y) {
-            const container = document.getElementById('mapContainer');
-            const robot = document.getElementById('robotIcon');
-
-            // Recalculate center
-            const centerX = container.clientWidth / 2;
-            const centerY = container.clientHeight / 2;
-
-            // X -> Right, Y -> Up (CSS Top is inverted)
-            const cssLeft = centerX + (x * SCALE); 
-            const cssTop  = centerY - (y * SCALE); 
-
-            robot.style.left = `${cssLeft}px`;
-            robot.style.top = `${cssTop}px`;
-        }
-
-        // --- API LOOP ---
-        function fetchTelemetry() {
-            fetch('/api/telemetry')
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('posX').innerText = data.x.toFixed(1);
-                    document.getElementById('posY').innerText = data.y.toFixed(1);
-                    document.getElementById('batVal').innerText = data.battery.toFixed(0);
-                    
-                    updateMap(data.x, data.y);
-
-                    // Sync Emergency State if needed
-                    if (data.emergency && !isEmergency) {
-                        // Force UI update if backend says emergency is ON but UI says OFF
-                        isEmergency = true;
-                        updateEmergencyUI();
-                    }
-                })
-                .catch(e => {});
-        }
-        setInterval(fetchTelemetry, 250);
-
-        // --- CONTROLS ---
         function updateLabels() {
             document.getElementById('valLin').innerText = parseFloat(document.getElementById('linearSpeed').value).toFixed(2);
             document.getElementById('valAng').innerText = parseFloat(document.getElementById('angularSpeed').value).toFixed(2);

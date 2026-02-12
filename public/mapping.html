@@ -165,6 +165,40 @@
             margin: 10px 0;
             line-height: 1.4;
         }
+        .save-btn {
+            background: #27ae60; 
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px; 
+            margin-top: auto;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            width: 100%; 
+        }
+        .save-btn:active { background: #219150; }
+        .save-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+
+        .slam-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .slam-btn.start { background: #27ae60; }
+        .slam-btn.start:active { background: #219150; }
+        
+        .slam-btn.stop { background: #c0392b; }
+        .slam-btn.stop:active { background: #a93226; }
     </style>
 </head>
 <body>
@@ -181,6 +215,10 @@
 
     <div class="right-panel">
         <h3>MAPPING MODE</h3>
+        <div class="slam-controls" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="slam-btn start" onclick="toggleSlam('start')">START SLAM</button>
+            <button class="slam-btn stop" onclick="toggleSlam('stop')">STOP SLAM</button>
+        </div>
 
         <div class="status-card">
             <div class="status-label">Bridge Connection</div>
@@ -189,7 +227,7 @@
 
         <p class="info-text">
             Utilisez les fleches pour scanner la zone.<br>
-            Le SLAM generera la carte automatiquement.
+            Le robot est represente par le triangle rouge.
         </p>
 
         <div class="controls-grid">
@@ -199,36 +237,35 @@
             <button class="ctrl-btn" style="grid-column: 3; grid-row: 2;" onmousedown="move(0,-1)" onmouseup="stop()" onmouseleave="stop()">▶</button>
         </div>
 
+
+        <button class="save-btn" onclick="saveMap()">SAVE MAP</button>
         <button class="reset-btn" onclick="resetMap()">RESET MAP</button>
         <button class="menu-btn" onclick="window.location.href='index.html'">RETOUR MENU</button>
     </div>
 
-<script>
+    <script>
         let ros = null; 
         let viewer = null;
         let gridClient = null;
+        let robotMarker = null;
 
-        // --- 1. INITIALISATION SYSTEME ---
         async function startSystem() {
             try {
-                // On demande la config au serveur
                 const response = await fetch(window.location.origin + '/api/config');
+                
+                if (!response.ok) throw new Error("Erreur config");
+                
                 const config = await response.json();
 
-                console.log("Config reçue du serveur :", config);
+                console.log("Config recue du serveur :", config);
 
                 let rosUrl = '';
 
-                // CAS 1 : Ton fichier config.js renvoie ROSBRIDGE_URL (ce que tu as maintenant)
                 if (config.ROSBRIDGE_URL) {
                     rosUrl = config.ROSBRIDGE_URL;
-                } 
-                // CAS 2 : Sécurité si jamais tu changes de format un jour
-                else if (config.robotIP) {
+                } else if (config.robotIP) {
                     rosUrl = `ws://${config.robotIP}:${config.rosPort || '9090'}`;
-                } 
-                // CAS 3 : Fallback local
-                else {
+                } else {
                     rosUrl = 'ws://' + window.location.hostname + ':9090';
                 }
 
@@ -236,7 +273,7 @@
                 connectToRos(rosUrl);
 
             } catch (err) {
-                console.error("Erreur config, passage en localhost", err);
+                console.error("Echec chargement config, utilisation de localhost", err);
                 connectToRos('ws://' + window.location.hostname + ':9090');
             }
         }
@@ -258,13 +295,12 @@
                 document.getElementById('status').innerText = "OFFLINE";
                 document.getElementById('status').style.color = "#e74c3c";
                 document.querySelector('.status-card').style.borderColor = "#e74c3c";
-                console.log("Erreur de connexion ROS :", err);
             });
         }
 
-        // --- 2. GESTION DE LA CARTE ---
         function initMap() {
             const container = document.getElementById('map-container');
+            
             container.innerHTML = '<div id="ros-map"></div>';
 
             viewer = new ROS2D.Viewer({
@@ -285,25 +321,121 @@
                 viewer.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
                 viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
             });
+
+  
+            robotMarker = new createjs.Shape();
+            robotMarker.graphics.beginFill("#e74c3c").drawPolyStar(0, 0, 0.3, 3, 0, -90); // Triangle pointe vers l'avant
+            
+            robotMarker.visible = false;
+            viewer.scene.addChild(robotMarker);
+
+            // --- ABONNEMENT A L'ODOMETRIE ---
+            const odomTopic = new ROSLIB.Topic({
+                ros: ros,
+                name: '/odom',
+                messageType: 'nav_msgs/Odometry'
+            });
+
+            odomTopic.subscribe((message) => {
+                // Mise a jour de la position (X, Y)
+                robotMarker.x = message.pose.pose.position.x;
+                robotMarker.y = message.pose.pose.position.y;
+
+                const q = message.pose.pose.orientation;
+                const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+                const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+                const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                robotMarker.rotation = -yaw * (180.0 / Math.PI);
+                
+                robotMarker.visible = true;
+            });
         }
 
         function resetMap() {
-            if (!ros) return;
-            const sysCommand = new ROSLIB.Topic({
-                ros: ros,
-                name: '/syscommand',
-                messageType: 'std_msgs/String'
-            });
-            const resetMsg = new ROSLIB.Message({ data: 'reset' });
-            sysCommand.publish(resetMsg);
-            setTimeout(() => window.location.reload(), 500);
+            const btn = document.querySelector('.reset-btn');
+            const originalText = btn.innerText;
+
+            // Feedback visuel
+            btn.innerText = "REDÉMARRAGE...";
+            btn.style.backgroundColor = "#e74c3c";
+            document.getElementById('map-info').innerText = "RESETTING SLAM...";
+        
+            // Appel API
+            fetch(window.location.origin + '/api/reset_slam', { method: 'POST' })
+                .then(() => {
+                    // On attend un peu que le SLAM redémarre (5 secondes)
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.style.backgroundColor = "#d35400"; 
+                        window.location.reload(); 
+                    }, 5000);
+                })
+                .catch(err => {
+                    console.error(err);
+                    btn.innerText = "ERREUR";
+                });
         }
 
-        // --- 3. PILOTAGE FLUIDE ---
+        function saveMap() {
+            const btn = document.querySelector('.save-btn');
+            const originalText = btn.innerText;
+                
+            // Feedback visuel
+            btn.innerText = "SAUVEGARDE EN COURS...";
+            btn.disabled = true; // On désactive le bouton pour éviter de cliquer 2 fois
+                
+            fetch(window.location.origin + '/api/save_map', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert("Carte sauvegardée avec succès !");
+                    console.log(data.details);
+                } else {
+                    alert("Erreur lors de la sauvegarde.");
+                }
+                btn.innerText = originalText;
+                btn.disabled = false;
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur réseau");
+                btn.innerText = originalText;
+                btn.disabled = false;
+            });
+        }
+
+        function toggleSlam(action) {
+            const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
+            const btn = document.querySelector(`.slam-btn.${action}`);
+            const originalText = btn.innerText;
+
+            btn.innerText = "...";
+            
+            fetch(window.location.origin + endpoint, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    console.log(data);
+                    if(data.status === 'success') {
+                        btn.innerText = action === 'start' ? "RUNNING" : "STOPPED";
+                        setTimeout(() => { 
+                            btn.innerText = originalText; 
+                            if(action === 'start') window.location.reload(); // Recharger pour voir la map
+                        }, 2000);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    btn.innerText = "ERROR";
+                    setTimeout(() => btn.innerText = originalText, 2000);
+                });
+        }
+
         let moveInterval = null;
 
         function move(lin, ang) {
             if (moveInterval) return;
+
             const url = window.location.origin + '/api/move';
             
             const sendCommand = () => {

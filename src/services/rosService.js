@@ -61,7 +61,6 @@ class RosService {
         }
     }
 
-    // Méthode publique pour récupérer les data
     getTelemetry() {
         return this.robotData;
     }
