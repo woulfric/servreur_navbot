@@ -1,0 +1,116 @@
+/* CSS Variables for Light and Dark Mode - Custom Palette */
+:root[data-theme="light"],
+:root {
+  /* Light Mode - Text Colors */
+  --text-primary: #081F5C;
+  --text-secondary: #24386E;
+  --text-tertiary: #546FA8;
+  --text-light: #E5E6E9;
+  
+  /* Light Mode - Background Colors */
+  --bg-primary: #FCFDFF;
+  --bg-secondary: #FCFDFF;
+  --bg-tertiary: #E5E6E9;
+  --bg-hover: #D4EBFF;
+  
+  /* Light Mode - Border Colors */
+  --border-light: #D4EBFF;
+  --border-medium: #E5E6E9;
+  --border-heavy: #546FA8;
+  
+  /* Light Mode - Other Colors */
+  --topbar-bg: #FCFDFF;
+  --card-bg: #FCFDFF;
+  --card-shadow: 0 4px 20px rgba(8, 31, 92, 0.08);
+  --sidebar-bg: #FCFDFF;
+  --button-hover-bg: #D4EBFF;
+  --accent-primary: #22c55e;
+  --accent-secondary: #16a34a;
+  
+  /* Status Colors - Light Mode */
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+}
+
+:root[data-theme="dark"] {
+  /* Dark Mode - Text Colors (inverted) */
+  --text-primary: #E5E6E9;
+  --text-secondary: #D4EBFF;
+  --text-tertiary: #546FA8;
+  --text-light: #24386E;
+  
+  /* Dark Mode - Background Colors */
+  --bg-primary: radial-gradient(circle at top, #081F5C, #0d1436);
+  --bg-secondary: rgba(36, 56, 110, 0.3);
+  --bg-tertiary: rgba(36, 56, 110, 0.2);
+  --bg-hover: rgba(212, 235, 255, 0.1);
+  
+  /* Dark Mode - Border Colors */
+  --border-light: rgba(212, 235, 255, 0.15);
+  --border-medium: rgba(212, 235, 255, 0.25);
+  --border-heavy: rgba(212, 235, 255, 0.4);
+  
+  /* Dark Mode - Other Colors */
+  --topbar-bg: rgba(8, 31, 92, 0.95);
+  --card-bg: rgba(36, 56, 110, 0.3);
+  --card-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  --sidebar-bg: rgba(36, 56, 110, 0.2);
+  --button-hover-bg: rgba(212, 235, 255, 0.15);
+  --accent-primary: #4ade80;
+  --accent-secondary: #22c55e;
+  
+  /* Status Colors - Dark Mode */
+  --color-success: #4ade80;
+  --color-warning: #facc15;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
+}
+
+/* RESET */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-y: auto;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+
+/* SCROLLBAR */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent-secondary);
+  border-radius: 10px;
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--accent-secondary);
+}
+
+.notif {
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.notif.warning { background: rgba(212, 235, 255, 0.3); color: #081F5C; }
+.notif.success { background: rgba(36, 56, 110, 0.3); color: #081F5C; }
+.notif.error { background: rgba(84, 111, 168, 0.3); color: #081F5C; }
+
+:root[data-theme="dark"] .notif.warning { background: rgba(212, 235, 255, 0.2); color: #D4EBFF; }
+:root[data-theme="dark"] .notif.success { background: rgba(36, 56, 110, 0.2); color: #D4EBFF; }
+:root[data-theme="dark"] .notif.error { background: rgba(84, 111, 168, 0.2); color: #D4EBFF; }

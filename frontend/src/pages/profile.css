@@ -1,0 +1,426 @@
+.profile-page {
+  display: contents; /* laisse la grille de DashboardLayout gérer le layout */
+}
+
+/* header principal */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 20%, #38bdf8, #1d4ed8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 26px;
+}
+
+.profile-main-info h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+  color: #1a1a1a;
+}
+
+.profile-role {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.profile-meta {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.profile-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8ecf1;
+  color: #4a5568;
+}
+
+/* actions à droite */
+.profile-actions {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: #2563eb;
+  color: white;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: #4a5568;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.last-login {
+  font-size: 11px;
+  opacity: 0.7;
+  color: #718096;
+}
+
+/* listes d’infos */
+.profile-list {
+  list-style: none;
+}
+
+.profile-list li {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.profile-list span {
+  opacity: 0.7;
+  color: #718096;
+}
+
+.profile-list strong {
+  font-weight: 500;
+}
+
+/* activité récente */
+.activity-list {
+  list-style: none;
+}
+
+.activity-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.activity-list p {
+  margin: 0;
+}
+
+.activity-list small {
+  opacity: 0.6;
+  color: #718096;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-top: 5px;
+}
+
+.dot.success { background: var(--accent-primary); }
+.dot.warning { background: #facc15; }
+.dot.info    { background: #38bdf8; }
+/* Responsive */
+/* Large Desktop (1025px - 1440px) */
+@media (max-width: 1400px) {
+  .profile-header {
+    gap: 20px;
+  }
+
+  .profile-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 24px;
+  }
+
+  .profile-main-info h2 {
+    font-size: 20px;
+  }
+
+  .profile-role {
+    font-size: 13px;
+  }
+}
+
+/* Small Desktop (769px - 1024px) */
+@media (max-width: 1200px) {
+  .profile-header {
+    gap: 16px;
+  }
+
+  .profile-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 22px;
+  }
+
+  .profile-main-info h2 {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .profile-role {
+    font-size: 12px;
+  }
+
+  .profile-meta {
+    font-size: 12px;
+  }
+
+  .profile-tags {
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .profile-actions {
+    gap: 6px;
+  }
+
+  .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .profile-list li {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .activity-list li {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .profile-header {
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .profile-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+
+  .profile-main-info h2 {
+    font-size: 16px;
+  }
+
+  .profile-role {
+    font-size: 11px;
+  }
+
+  .profile-meta {
+    font-size: 11px;
+  }
+
+  .profile-actions {
+    margin-left: auto;
+    gap: 4px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .profile-list li {
+    font-size: 12px;
+  }
+
+  .activity-list li {
+    font-size: 11px;
+  }
+}
+
+/* Tablet (481px - 768px) */
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .profile-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+
+  .profile-main-info h2 {
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+
+  .profile-role {
+    font-size: 12px;
+  }
+
+  .profile-meta {
+    font-size: 11px;
+  }
+
+  .profile-tags {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .profile-actions {
+    margin-left: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    flex: 1;
+  }
+
+  .last-login {
+    font-size: 10px;
+    margin-top: 4px;
+  }
+
+  .profile-list li {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .activity-list li {
+    font-size: 12px;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    margin-top: 6px;
+  }
+}
+
+/* Mobile (< 480px) */
+@media (max-width: 480px) {
+  .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .profile-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+
+  .profile-main-info h2 {
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .profile-role {
+    font-size: 11px;
+  }
+
+  .profile-meta {
+    font-size: 10px;
+  }
+
+  .profile-tags {
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .tag {
+    font-size: 8px;
+    padding: 2px 6px;
+  }
+
+  .profile-actions {
+    margin-left: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .btn {
+    padding: 8px 12px;
+    font-size: 10px;
+    width: 100%;
+  }
+
+  .last-login {
+    font-size: 9px;
+    margin-top: 4px;
+  }
+
+  .profile-list li {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .profile-list span {
+    font-size: 10px;
+  }
+
+  .activity-list li {
+    font-size: 11px;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .activity-list small {
+    font-size: 9px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    margin-top: 4px;
+  }
+}
