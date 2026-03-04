@@ -1,50 +1,237 @@
+import { useState, useEffect, useRef } from 'react';
 import Card from '../components/common/Card';
+import DashboardLayout from '../components/layout/DashboardLayout';
 import './telecommande.css';
 
 export default function Telecommande() {
+  const [battery, setBattery] = useState('--');
+  const [posX, setPosX] = useState('0.00');
+  const [posY, setPosY] = useState('0.00');
+  const [status, setStatus] = useState('CONNECTING...');
+  const [linearSpeed, setLinearSpeed] = useState(0.2);
+  const [angularSpeed, setAngularSpeed] = useState(0.8);
+  const [isEmergency, setIsEmergency] = useState(false);
+
+  const moveInterval = useRef(null);
+  const mapContainerRef = useRef(null);
+  const rosRef = useRef(null);
+  const viewerRef = useRef(null);
+
+  const robotIpCam = window.location.hostname;
+  const cameraTopic = '/oakd/rgb/preview/image_raw';
+  const videoUrl = `http://${robotIpCam}:8080/stream?topic=${cameraTopic}&type=mjpeg&quality=30`;
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(config => {
+        const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
+        const ros = new window.ROSLIB.Ros({ url: rosUrl });
+        rosRef.current = ros;
+
+        ros.on('connection', () => {
+          setStatus('CONNECTED');
+          setupMapViewer(ros);
+        });
+        ros.on('error', () => setStatus('ERROR'));
+        ros.on('close', () => setStatus('DISCONNECTED'));
+
+        const batListener = new window.ROSLIB.Topic({
+          ros: ros,
+          name: '/battery_state',
+          messageType: 'sensor_msgs/BatteryState'
+        });
+        batListener.subscribe((bat) => {
+          let percent = Math.round(bat.percentage * 100);
+          if (percent > 100) percent = 100;
+          setBattery(percent);
+        });
+
+      })
+      .catch(err => console.error("Erreur config:", err));
+
+    return () => {
+      if (rosRef.current) rosRef.current.close();
+    };
+  }, []);
+
+  const setupMapViewer = (ros) => {
+    if (!mapContainerRef.current) return;
+    mapContainerRef.current.innerHTML = '';
+
+    viewerRef.current = new window.ROS2D.Viewer({
+      divID: mapContainerRef.current.id,
+      width: mapContainerRef.current.offsetWidth || 800,
+      height: 450,
+      background: '#1a1a1a'
+    });
+
+    const gridClient = new window.ROS2D.OccupancyGridClient({
+      ros: ros,
+      rootObject: viewerRef.current.scene,
+      continuous: false 
+    });
+
+    gridClient.on('change', () => {
+      viewerRef.current.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
+      viewerRef.current.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
+    });
+
+    const robotMarker = new window.ROS2D.NavigationArrow({
+      size: 25, strokeSize: 1, fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
+    });
+    robotMarker.visible = false;
+    viewerRef.current.scene.addChild(robotMarker);
+
+    const odomListener = new window.ROSLIB.Topic({
+      ros: ros,
+      name: '/odom',
+      messageType: 'nav_msgs/Odometry'
+    });
+
+    odomListener.subscribe((pose) => {
+      robotMarker.x = pose.pose.pose.position.x;
+      robotMarker.y = pose.pose.pose.position.y;
+      
+      const q = pose.pose.pose.orientation;
+      const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+      const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+      const yaw = Math.atan2(siny_cosp, cosy_cosp);
+      
+      robotMarker.rotation = -yaw * (180.0 / Math.PI);
+      robotMarker.visible = true;
+
+      setPosX(pose.pose.pose.position.x.toFixed(2));
+      setPosY(pose.pose.pose.position.y.toFixed(2));
+    });
+  };
+
+  const sendCommand = (lin, ang) => {
+    if (isEmergency) return;
+    fetch('/api/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ linear: lin, angular: ang })
+    }).catch(e => console.error(e));
+  };
+
+  const startMove = (linMult, angMult) => {
+    if (isEmergency || moveInterval.current) return;
+    const lin = linearSpeed * linMult;
+    const ang = angularSpeed * angMult;
+    sendCommand(lin, ang);
+    moveInterval.current = setInterval(() => sendCommand(lin, ang), 150);
+  };
+
+  const stopMove = () => {
+    if (moveInterval.current) {
+      clearInterval(moveInterval.current);
+      moveInterval.current = null;
+    }
+    fetch('/api/stop', { method: 'POST' });
+  };
+
+  const toggleEmergency = () => {
+    const newState = !isEmergency;
+    setIsEmergency(newState);
+    fetch('/api/emergency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: newState ? 'on' : 'off' })
+    });
+    if (newState) stopMove();
+  };
+
   return (
-    <div className="teleop-page">
-      {/* Zone contrôle manuelle */}
-      <Card title="Manual Control" span={2}>
-        <div className="teleop-main">
-          <div className="teleop-pad">
-            <button className="teleop-btn up">↑</button>
-            <div className="teleop-middle-row">
-              <button className="teleop-btn left">←</button>
-              <button className="teleop-btn stop">■</button>
-              <button className="teleop-btn right">→</button>
+    <DashboardLayout>
+      <div className="teleop-page">
+        
+        {/* PANNEAU GAUCHE */}
+        <div className="teleop-col-left">
+          <Card title="Live Camera Feed">
+            <div className="video-container">
+              <img 
+                src={videoUrl} 
+                alt="Flux vidéo indisponible" 
+                onError={(e) => { e.target.style.display = 'none'; setTimeout(() => { e.target.src = videoUrl; e.target.style.display = 'block'; }, 2000); }}
+              />
             </div>
-            <button className="teleop-btn down">↓</button>
+          </Card>
+
+          <Card title="Live Map">
+            <div id="ros-map-container" ref={mapContainerRef} className="map-container"></div>
+          </Card>
+        </div>
+
+        {/* PANNEAU DROIT */}
+        <div className="teleop-col-right">
+          
+          <div className="telemetry-grid">
+            <Card title="Position (X/Y)">
+              <div className="telemetry-val">
+                {posX} <span className="telemetry-sep">|</span> {posY}
+              </div>
+            </Card>
+            <Card title="Battery">
+              <div className="telemetry-val battery-val">
+                {battery}%
+              </div>
+            </Card>
           </div>
 
-          <div className="teleop-speed">
-            <p>Speed</p>
-            <div className="speed-buttons">
-              <button className="chip active">Slow</button>
-              <button className="chip">Normal</button>
-              <button className="chip">Fast</button>
+          <Card title="Manual Control">
+            <div className={isEmergency ? 'blocked' : ''}>
+              
+              <div className="teleop-pad">
+                <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
+                <div className="teleop-middle-row">
+                  <button className="teleop-btn left" onMouseDown={() => startMove(0, 1)} onMouseUp={stopMove} onMouseLeave={stopMove}>◀</button>
+                  <button className="teleop-btn stop" onClick={stopMove}>■</button>
+                  <button className="teleop-btn right" onMouseDown={() => startMove(0, -1)} onMouseUp={stopMove} onMouseLeave={stopMove}>▶</button>
+                </div>
+                <button className="teleop-btn down" onMouseDown={() => startMove(-1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▼</button>
+              </div>
+
+              <div className="teleop-speed">
+                <div className="slider-group">
+                  <div className="slider-labels">
+                    <span>Vitesse Linéaire</span>
+                    <span>{linearSpeed.toFixed(2)} m/s</span>
+                  </div>
+                  <input type="range" className="slider-input" min="0.05" max="0.45" step="0.05" value={linearSpeed} onChange={(e) => setLinearSpeed(parseFloat(e.target.value))} />
+                </div>
+                
+                <div className="slider-group">
+                  <div className="slider-labels">
+                    <span>Vitesse Angulaire</span>
+                    <span>{angularSpeed.toFixed(2)} rad/s</span>
+                  </div>
+                  <input type="range" className="slider-input" min="0.1" max="1.9" step="0.1" value={angularSpeed} onChange={(e) => setAngularSpeed(parseFloat(e.target.value))} />
+                </div>
+              </div>
+
             </div>
-          </div>
-        </div>
-      </Card>
+          </Card>
 
-      {/* Statut robot */}
-      <Card title="Robot Status">
-        <ul className="teleop-list">
-          <li><span>Mode</span><strong>MANUAL</strong></li>
-          <li><span>Battery</span><strong>82%</strong></li>
-          <li><span>Connection</span><strong>Connected</strong></li>
-          <li><span>Current speed</span><strong>0.35 m/s</strong></li>
-        </ul>
-      </Card>
-
-      {/* Sécurité */}
-      <Card title="Safety" span={3}>
-        <div className="teleop-safety">
-          <button className="btn-emergency">EMERGENCY STOP</button>
-          <p>Use manual control only in safe, supervised environments.</p>
+          <Card title="System Status">
+            <ul className="teleop-list">
+              <li>
+                <span>Connection</span>
+                <strong className={`status-val ${status === 'CONNECTED' ? 'connected' : 'disconnected'}`}>
+                  {status}
+                </strong>
+              </li>
+            </ul>
+            <button 
+              className={`btn-emergency ${isEmergency ? 'active' : ''}`} 
+              onClick={toggleEmergency}
+            >
+              {isEmergency ? "UNLOCK SYSTEM" : "EMERGENCY STOP"}
+            </button>
+          </Card>
         </div>
-      </Card>
-    </div>
+
+      </div>
+    </DashboardLayout>
   );
 }

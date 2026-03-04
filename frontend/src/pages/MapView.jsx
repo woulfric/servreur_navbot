@@ -1,107 +1,238 @@
+import { useState, useEffect, useRef } from 'react';
 import Card from '../components/common/Card';
-import './mapView.css';
-import { useRef } from 'react';
+import DashboardLayout from '../components/layout/DashboardLayout';
+import './telecommande.css'; // On réutilise volontairement la grille de la télécommande !
 
 export default function MapView() {
-  const svgRef = useRef(null);
+  const [status, setStatus] = useState('CONNECTING...');
+  const [mapInfo, setMapInfo] = useState('WAITING DATA...');
+  const [posX, setPosX] = useState('0.00');
+  const [posY, setPosY] = useState('0.00');
 
-  // Dimensions de l'espace
-  const mapWidth = 1000;
-  const mapHeight = 800;
-  const scale = 2; // pixels par mètre
+  const moveInterval = useRef(null);
+  const mapContainerRef = useRef(null);
+  const rosRef = useRef(null);
+  const viewerRef = useRef(null);
+  const gridClientRef = useRef(null);
 
-  // Position du robot en coordonnées réelles (mètres)
-  const robotPose = {
-    x: 5,      // mètres
-    y: 4,      // mètres
-    heading: 45, // degrés
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(config => {
+        const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
+        const ros = new window.ROSLIB.Ros({ url: rosUrl });
+        rosRef.current = ros;
+
+        ros.on('connection', () => {
+          setStatus('CONNECTED');
+          setupMapViewer(ros);
+        });
+        ros.on('error', () => setStatus('ERROR'));
+        ros.on('close', () => setStatus('DISCONNECTED'));
+      })
+      .catch(err => console.error("Erreur config:", err));
+
+    return () => {
+      if (rosRef.current) rosRef.current.close();
+    };
+  }, []);
+
+  const setupMapViewer = (ros) => {
+    if (!mapContainerRef.current) return;
+    mapContainerRef.current.innerHTML = '';
+
+    viewerRef.current = new window.ROS2D.Viewer({
+      divID: mapContainerRef.current.id,
+      width: mapContainerRef.current.offsetWidth || 800,
+      height: 600, // Une zone de carte bien haute
+      background: '#1a1a1a'
+    });
+
+    gridClientRef.current = new window.ROS2D.OccupancyGridClient({
+      ros: ros,
+      rootObject: viewerRef.current.scene,
+      continuous: true // CRUCIAL POUR LE SLAM : Met à jour la carte en direct
+    });
+
+    gridClientRef.current.on('change', () => {
+      setMapInfo('GRID RECEIVED');
+      viewerRef.current.scaleToDimensions(gridClientRef.current.currentGrid.width, gridClientRef.current.currentGrid.height);
+      viewerRef.current.shift(gridClientRef.current.currentGrid.pose.position.x, gridClientRef.current.currentGrid.pose.position.y);
+    });
+
+    const robotMarker = new window.ROS2D.NavigationArrow({
+      size: 25, strokeSize: 1, fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
+    });
+    robotMarker.visible = false;
+    viewerRef.current.scene.addChild(robotMarker);
+
+    const odomListener = new window.ROSLIB.Topic({
+      ros: ros,
+      name: '/odom',
+      messageType: 'nav_msgs/Odometry'
+    });
+
+    odomListener.subscribe((pose) => {
+      robotMarker.x = pose.pose.pose.position.x;
+      robotMarker.y = pose.pose.pose.position.y;
+      const q = pose.pose.pose.orientation;
+      const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+      const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+      const yaw = Math.atan2(siny_cosp, cosy_cosp);
+      robotMarker.rotation = -yaw * (180.0 / Math.PI);
+      robotMarker.visible = true;
+
+      setPosX(pose.pose.pose.position.x.toFixed(2));
+      setPosY(pose.pose.pose.position.y.toFixed(2));
+    });
   };
 
-  // Convertir en pixels pour l'affichage
-  const robotPixelX = robotPose.x * scale;
-  const robotPixelY = robotPose.y * scale;
+  // --- ACTIONS SLAM (Appels à tes scripts bash) ---
+  const toggleSlam = (action) => {
+    setMapInfo(action === 'start' ? 'STARTING SLAM...' : 'STOPPING SLAM...');
+    const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
+    
+    fetch(endpoint, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setMapInfo(action === 'start' ? 'SLAM RUNNING' : 'SLAM STOPPED');
+          if (action === 'start') {
+            setTimeout(() => window.location.reload(), 2000); // Recharge la page pour accrocher le nouveau topic map
+          }
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setMapInfo('ERROR SLAM');
+      });
+  };
+
+  const saveMap = () => {
+    setMapInfo('SAVING MAP...');
+    fetch('/api/save_map', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setMapInfo('MAP SAVED !');
+          alert("Carte sauvegardée avec succès sur le serveur !");
+        } else {
+          setMapInfo('SAVE FAILED');
+        }
+      })
+      .catch(err => setMapInfo('ERROR SAVING'));
+  };
+
+  const resetMap = () => {
+    setMapInfo('RESETTING SLAM...');
+    fetch('/api/reset_slam', { method: 'POST' })
+      .then(() => {
+        setTimeout(() => window.location.reload(), 5000); // Laisse 5 secondes au script bash pour relancer
+      })
+      .catch(err => setMapInfo('ERROR RESET'));
+  };
+
+  // --- CONTROLE MANUEL POUR LE SCAN ---
+  // On fixe les vitesses pour le mapping à 0.2 m/s et 0.8 rad/s comme dans ton ancienne version
+  const sendCommand = (lin, ang) => {
+    fetch('/api/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ linear: lin * 0.2, angular: ang * 0.8 }) 
+    }).catch(e => console.error(e));
+  };
+
+  const startMove = (linMult, angMult) => {
+    if (moveInterval.current) return;
+    sendCommand(linMult, angMult);
+    moveInterval.current = setInterval(() => sendCommand(linMult, angMult), 200);
+  };
+
+  const stopMove = () => {
+    if (moveInterval.current) {
+      clearInterval(moveInterval.current);
+      moveInterval.current = null;
+    }
+    fetch('/api/stop', { method: 'POST' });
+  };
 
   return (
-    <div className="map-page">
-      <Card title="Map Overview" span={2}>
-        <div className="map-container">
-          <svg
-            ref={svgRef}
-            className="floorplan-svg"
-            viewBox={`0 0 ${mapWidth} ${mapHeight}`}
-            preserveAspectRatio="xMidYMid meet"
-          >
-            {/* Fond */}
-            <rect width={mapWidth} height={mapHeight} fill="#1a2332" />
-
-            {/* Grille de référence */}
-            <defs>
-              <pattern id="grid" width={scale * 2} height={scale * 2} patternUnits="userSpaceOnUse">
-                <path d={`M ${scale * 2} 0 L 0 0 0 ${scale * 2}`} fill="none" stroke="#2a3f5f" strokeWidth="0.5" />
-              </pattern>
-            </defs>
-            <rect width={mapWidth} height={mapHeight} fill="url(#grid)" />
-
-            {/* Murs de la pièce principale */}
-            <rect x="20" y="20" width="460" height="360" fill="none" stroke="#22c55e" strokeWidth="12" />
-
-            {/* Murs intérieurs - Séparation en zones */}
-            <line x1="240" y1="20" x2="240" y2="380" stroke="#22c55e" strokeWidth="8" opacity="0.6" />
-            <line x1="20" y1="200" x2="480" y2="200" stroke="#22c55e" strokeWidth="8" opacity="0.6" />
-
-            {/* Portes */}
-            <circle cx="150" cy="20" r="20" fill="#64748b" opacity="0.5" />
-            <circle cx="480" cy="100" r="20" fill="#64748b" opacity="0.5" />
-
-            {/* Zones de danger/obstacles */}
-            <rect x="350" y="250" width="80" height="80" fill="#ef4444" opacity="0.3" stroke="#ef4444" strokeWidth="2" strokeDasharray="5,5" />
-            <text x="355" y="295" fontSize="12" fill="#ef4444" fontWeight="bold">Obstacle</text>
-
-            {/* Marqueurs de POI (Points of Interest) */}
-            <circle cx="100" cy="300" r="15" fill="#3b82f6" opacity="0.4" stroke="#3b82f6" strokeWidth="2" />
-            <text x="85" y="325" fontSize="11" fill="#3b82f6">POI 1</text>
-
-            <circle cx="400" cy="100" r="15" fill="#3b82f6" opacity="0.4" stroke="#3b82f6" strokeWidth="2" />
-            <text x="390" y="125" fontSize="11" fill="#3b82f6">POI 2</text>
-
-            {/* Robot avec direction */}
-            <g transform={`translate(${robotPixelX}, ${robotPixelY}) rotate(${robotPose.heading})`}>
-              {/* Corps du robot */}
-              <circle cx="0" cy="0" r="15" fill="none" stroke="#22c55e" strokeWidth="2" />
-              {/* Flèche de direction */}
-              <polygon points="0,-20 -8,5 0,0 8,5" fill="#22c55e" />
-              {/* Lueur */}
-              <circle cx="0" cy="0" r="15" fill="none" stroke="#22c55e" strokeWidth="1" opacity="0.3" r="20" />
-            </g>
-
-            {/* Échelle */}
-            <g transform="translate(650, 720)">
-              <line x1="0" y1="0" x2={scale * 5} y2="0" stroke="#94a3b8" strokeWidth="2" />
-              <line x1="0" y1="-5" x2="0" y2="5" stroke="#94a3b8" strokeWidth="2" />
-              <line x1={scale * 5} y1="-5" x2={scale * 5} y2="5" stroke="#94a3b8" strokeWidth="2" />
-              <text x={scale * 2.5} y="20" fontSize="12" fill="#94a3b8" textAnchor="middle">5m</text>
-            </g>
-
-            {/* Axes X Y */}
-            <g transform="translate(50, 680)">
-              <line x1="0" y1="0" x2="50" y2="0" stroke="#ef4444" strokeWidth="2" />
-              <text x="55" y="5" fontSize="12" fill="#ef4444" fontWeight="bold">X</text>
-
-              <line x1="0" y1="0" x2="0" y2="-50" stroke="#3b82f6" strokeWidth="2" />
-              <text x="-15" y="-55" fontSize="12" fill="#3b82f6" fontWeight="bold">Y</text>
-            </g>
-          </svg>
+    <DashboardLayout>
+      <div className="teleop-page">
+        
+        {/* PANNEAU GAUCHE : La Carte */}
+        <div className="teleop-col-left">
+          <Card title={`SLAM Visualizer - Status : ${mapInfo}`}>
+            <div 
+              id="ros-map-container" 
+              ref={mapContainerRef} 
+              className="map-container" 
+              style={{ height: '600px' }}
+            ></div>
+          </Card>
         </div>
-      </Card>
 
-      <Card title="Robot Position">
-        <ul className="map-info">
-          <li><span>X</span><strong>{robotPose.x.toFixed(2)} m</strong></li>
-          <li><span>Y</span><strong>{robotPose.y.toFixed(2)} m</strong></li>
-          <li><span>Heading</span><strong>{robotPose.heading}°</strong></li>
-          <li><span>Échelle</span><strong>{scale} px/m</strong></li>
-        </ul>
-      </Card>
-    </div>
+        {/* PANNEAU DROIT : Contrôles du SLAM et Robot */}
+        <div className="teleop-col-right">
+          
+          <Card title="SLAM Controls">
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+              <button 
+                style={{ flex: 1, padding: '15px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
+                onClick={() => toggleSlam('start')}
+              >
+                START SLAM
+              </button>
+              <button 
+                style={{ flex: 1, padding: '15px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
+                onClick={() => toggleSlam('stop')}
+              >
+                STOP SLAM
+              </button>
+            </div>
+            
+            <button 
+              style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '10px' }} 
+              onClick={saveMap}
+            >
+              SAVE CURRENT MAP
+            </button>
+            <button 
+              style={{ width: '100%', padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
+              onClick={resetMap}
+            >
+              RESET SLAM
+            </button>
+          </Card>
+
+          <Card title="Robot Override">
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+              Utilisez les flèches pour déplacer le robot et scanner la zone.
+            </p>
+            <div className="teleop-pad" style={{ margin: 0 }}>
+              <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
+              <div className="teleop-middle-row">
+                <button className="teleop-btn left" onMouseDown={() => startMove(0, 1)} onMouseUp={stopMove} onMouseLeave={stopMove}>◀</button>
+                <button className="teleop-btn stop" onClick={stopMove}>■</button>
+                <button className="teleop-btn right" onMouseDown={() => startMove(0, -1)} onMouseUp={stopMove} onMouseLeave={stopMove}>▶</button>
+              </div>
+              <button className="teleop-btn down" onMouseDown={() => startMove(-1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▼</button>
+            </div>
+          </Card>
+
+          <Card title="System Connection">
+            <ul className="teleop-list">
+              <li>
+                <span>Connection</span>
+                <strong className={`status-val ${status === 'CONNECTED' ? 'connected' : 'disconnected'}`}>
+                  {status}
+                </strong>
+              </li>
+            </ul>
+          </Card>
+
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }

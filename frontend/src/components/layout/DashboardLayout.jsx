@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import TopBar from './TopBar';
+import TopBar from "./Topbar";
 import NotificationsPanel from './NotificationsPanel';
 import './dashboardLayout.css';
 

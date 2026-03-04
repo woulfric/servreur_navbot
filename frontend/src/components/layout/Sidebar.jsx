@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Bot, Map, Flag, MapPin,
-  AlertTriangle, History, Settings, Gamepad2
+  AlertTriangle, History, Settings, Gamepad2, PlayCircle
 } from 'lucide-react';
 import './sidebar.css';
 import logo from './Logo_mod_1.png';
@@ -9,6 +9,7 @@ import logo from './Logo_mod_1.png';
 const menu = [
   { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={18} /> },
   { label: 'Robots', path: '/robots', icon: <Bot size={18} /> },
+  { label: 'Mapping (SLAM)', path: '/mapview', icon: <PlayCircle size={18} /> }, // Nouvelle page
   { label: 'Maps', path: '/maps', icon: <Map size={18} /> },
   { label: 'Missions', path: '/missions', icon: <Flag size={18} /> },
   { label: 'POI', path: '/poi', icon: <MapPin size={18} /> },
@@ -49,5 +50,3 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     </aside>
   );
 }
-
-
