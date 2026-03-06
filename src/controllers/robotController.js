@@ -1,145 +1,84 @@
-const rosService = require('../services/rosService');
-const config = require('../config/config');
-const { exec } = require('child_process');
-const path = require('path');
+const mqttService = require('../services/mqttService');
 
+const CURRENT_ROBOT_ID = 'tb3_01';
 
-let isEmergency = false;
-
-exports.getConfig = (req, res) => {
-    res.json(config);
+const getTelemetry = (req, res) => {
+  res.json({ status: 'ok' });
 };
 
-exports.getTelemetry = (req, res) => {
-    const data = rosService.getTelemetry();
-    res.json({ ...data, emergency: isEmergency });
+const moveRobot = (req, res) => {
+  const { linear, angular } = req.body;
+  
+  mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, linear, angular);
+  
+  res.json({ status: 'success', message: 'Commande de mouvement publiée' });
 };
 
-exports.moveRobot = (req, res) => {
-    if (isEmergency) {
-        return res.status(403).json({ error: "URGENCE ACTIVE", status: 'blocked' });
-    }
-
-    const { linear, angular } = req.body;
-    const msg = {
-        op: 'publish',
-        topic: '/cmd_vel',
-        msg: {
-            linear:  { x: parseFloat(linear || 0), y: 0.0, z: 0.0 },
-            angular: { x: 0.0, y: 0.0, z: parseFloat(angular || 0) }
-        }
-    };
-    rosService.send(msg);
-    res.json({ status: 'sent', cmd: { linear, angular } });
+const stopRobot = (req, res) => {
+  mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, 0.0, 0.0);
+  
+  res.json({ status: 'success', message: 'Commande d\'arrêt publiée' });
 };
 
-exports.stopRobot = (req, res) => {
-    const msg = {
-        op: 'publish', topic: '/cmd_vel',
-        msg: { linear: {x:0,y:0,z:0}, angular: {x:0,y:0,z:0} }
-    };
-    rosService.send(msg);
-    res.json({ status: 'stopped' });
+const toggleEmergency = (req, res) => {
+  const { state } = req.body;
+  
+  if (state === 'on') {
+    mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, 0.0, 0.0);
+    mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'emergency_stop');
+  } else {
+    mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'emergency_release');
+  }
+  
+  res.json({ status: 'success', state });
 };
 
-exports.toggleEmergency = (req, res) => {
-    const { state } = req.body; // 'on' ou 'off'
-    isEmergency = (state === 'on');
-    
-    if (isEmergency) {
-        const stopMsg = { op: 'publish', topic: '/cmd_vel', msg: { linear:{x:0,y:0,z:0}, angular:{x:0,y:0,z:0} } };
-        rosService.send(stopMsg);
-        console.log("ARRÊT D'URGENCE DÉCLENCHÉ");
-    } else {
-        console.log("Urgence levée");
-    }
-    res.json({ isEmergency });
+const getConfig = (req, res) => {
+  res.json({ 
+    ROSBRIDGE_URL: `ws://${req.hostname}:9090` 
+  });
 };
 
-exports.resetSlam = (req, res) => {
-    console.log("Demande de Reset SLAM reçue...");
-
-    const scriptPath = path.join(__dirname, '../../reset_slam.sh');
-
-    exec(scriptPath, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Erreur Reset: ${error.message}`);
-        }
-        if (stderr) console.error(`Stderr: ${stderr}`);
-        console.log(`Stdout: ${stdout}`);
-        
-        res.json({ status: 'success', message: 'Cycle de reset lancé' });
-    });
+const resetSlam = (req, res) => {
+  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'reset_slam');
+  res.json({ status: 'success', message: 'Ordre de réinitialisation publié' });
 };
 
-exports.saveMap = (req, res) => {
-    console.log("Demande de sauvegarde de map...");
-
-    const scriptPath = path.join(__dirname, '../../save_map.sh');
-
-    exec(scriptPath, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Erreur sauvegarde: ${error.message}`);
-            return res.status(500).json({ status: 'error', message: error.message });
-        }
-        
-        console.log(`Map sauvegardée !`);
-        res.json({ status: 'success', details: stdout });
-    });
+const saveMap = (req, res) => {
+  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'save_map');
+  res.json({ status: 'success', message: 'Ordre de sauvegarde publié' });
 };
 
-exports.getMaps = (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
-    const mapsDir = path.join(__dirname, '../../public/maps');
-
-    fs.readdir(mapsDir, (err, files) => {
-        if (err) return res.json({ maps: [] });
-        
-        const maps = files.filter(f => f.endsWith('.yaml'));
-        res.json({ status: 'success', maps: maps });
-    });
+const getMaps = (req, res) => {
+  res.json({ maps: [] });
 };
 
-exports.loadMap = (req, res) => {
-    const mapName = req.body.mapName;
-    const scriptPath = path.join(__dirname, '../../load_map.sh'); 
-
-    console.log(`Chargement de ${mapName}...`);
-
-    exec(`${scriptPath} ${mapName}`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(error);
-            return res.status(500).json({ status: 'error' });
-        }
-        console.log(stdout);
-        res.json({ status: 'success' });
-    });
+const loadMap = (req, res) => {
+  const { mapName } = req.body;
+  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, `load_map:${mapName}`);
+  res.json({ status: 'success', message: 'Ordre de chargement de la carte publié' });
 };
 
-exports.startSlam = (req, res) => {
-    console.log("Demande de démarrage SLAM...");
-    const scriptPath = path.join(__dirname, '../../start_slam.sh');
-
-    exec(scriptPath, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Erreur Start: ${error.message}`);
-            return res.status(500).json({ status: 'error', message: error.message });
-        }
-        console.log(`Start Output: ${stdout}`);
-        res.json({ status: 'success', message: 'SLAM Démarré' });
-    });
+const startSlam = (req, res) => {
+  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'start_slam');
+  res.json({ status: 'success', message: 'Ordre de démarrage du SLAM publié' });
 };
 
-exports.stopSlam = (req, res) => {
-    console.log("Demande d'arrêt SLAM...");
-    const scriptPath = path.join(__dirname, '../../stop_slam.sh');
+const stopSlam = (req, res) => {
+  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'stop_slam');
+  res.json({ status: 'success', message: 'Ordre d\'arrêt du SLAM publié' });
+};
 
-    exec(scriptPath, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Erreur Stop: ${error.message}`);
-        }
-        console.log(`Stop Output: ${stdout}`);
-        res.json({ status: 'success', message: 'SLAM Arrêté' });
-    });
+module.exports = {
+  getTelemetry,
+  moveRobot,
+  stopRobot,
+  toggleEmergency,
+  getConfig,
+  resetSlam,
+  saveMap,
+  getMaps,
+  loadMap,
+  startSlam,
+  stopSlam
 };
