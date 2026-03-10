@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const robotController = require('../controllers/robotController');
 
+router.get('/active', robotController.getActiveRobots);
 router.get('/telemetry', robotController.getTelemetry);
 router.post('/move', robotController.moveRobot);
 router.post('/stop', robotController.stopRobot);

@@ -1,52 +1,56 @@
 const mqttService = require('../services/mqttService');
 
-const CURRENT_ROBOT_ID = 'tb3_01';
+const getActiveRobots = (req, res) => {
+  const robots = mqttService.getActiveRobots();
+  res.json({ status: 'success', robots });
+};
 
 const getTelemetry = (req, res) => {
   res.json({ status: 'ok' });
 };
 
 const moveRobot = (req, res) => {
-  const { linear, angular } = req.body;
+  const { robotId, linear, angular } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
   
-  mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, linear, angular);
-  
-  res.json({ status: 'success', message: 'Commande de mouvement publiée' });
+  mqttService.publishVelocityCommand(robotId, linear, angular);
+  res.json({ status: 'success', message: 'Commande publiee' });
 };
 
 const stopRobot = (req, res) => {
-  mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, 0.0, 0.0);
-  
-  res.json({ status: 'success', message: 'Commande d\'arrêt publiée' });
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  mqttService.publishVelocityCommand(robotId, 0.0, 0.0);
+  res.json({ status: 'success', message: 'Arret publie' });
 };
 
 const toggleEmergency = (req, res) => {
-  const { state } = req.body;
+  const { robotId, state } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
   
   if (state === 'on') {
-    mqttService.publishVelocityCommand(CURRENT_ROBOT_ID, 0.0, 0.0);
-    mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'emergency_stop');
+    mqttService.publishVelocityCommand(robotId, 0.0, 0.0);
+    mqttService.publishSystemCommand(robotId, 'emergency_stop');
   } else {
-    mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'emergency_release');
+    mqttService.publishSystemCommand(robotId, 'emergency_release');
   }
   
   res.json({ status: 'success', state });
 };
 
 const getConfig = (req, res) => {
-  res.json({ 
-    ROSBRIDGE_URL: `ws://${req.hostname}:9090` 
-  });
-};
-
-const resetSlam = (req, res) => {
-  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'reset_slam');
-  res.json({ status: 'success', message: 'Ordre de réinitialisation publié' });
+  res.json({ ROSBRIDGE_URL: `ws://${req.hostname}:9090` });
 };
 
 const saveMap = (req, res) => {
-  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'save_map');
-  res.json({ status: 'success', message: 'Ordre de sauvegarde publié' });
+  // On extrait mapName en plus de robotId
+  const { robotId, mapName } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  // On transmet le mapName dans le paramètre extraData
+  mqttService.publishSystemCommand(robotId, 'save_map', { mapName });
+  res.json({ status: 'success', message: 'Save publie' });
 };
 
 const getMaps = (req, res) => {
@@ -54,22 +58,42 @@ const getMaps = (req, res) => {
 };
 
 const loadMap = (req, res) => {
-  const { mapName } = req.body;
-  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, `load_map:${mapName}`);
-  res.json({ status: 'success', message: 'Ordre de chargement de la carte publié' });
+  const { robotId, mapName } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  mqttService.publishSystemCommand(robotId, `load_map:${mapName}`);
+  res.json({ status: 'success', message: 'Load publie' });
 };
 
 const startSlam = (req, res) => {
-  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'start_slam');
-  res.json({ status: 'success', message: 'Ordre de démarrage du SLAM publié' });
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  mqttService.publishSystemCommand(robotId, 'start_slam');
+  res.json({ status: 'success', message: 'Start SLAM publie' });
 };
+
+const resetSlam = (req, res) => {
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+  
+  mqttService.publishSystemCommand(robotId, 'reset_slam');
+  res.json({ status: 'success', message: 'Reset publie' });
+};
+
 
 const stopSlam = (req, res) => {
-  mqttService.publishSystemCommand(CURRENT_ROBOT_ID, 'stop_slam');
-  res.json({ status: 'success', message: 'Ordre d\'arrêt du SLAM publié' });
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  mqttService.publishSystemCommand(robotId, 'stop_slam');
+  res.json({ status: 'success', message: 'Stop SLAM publie' });
 };
 
+
+
 module.exports = {
+  getActiveRobots,
   getTelemetry,
   moveRobot,
   stopRobot,

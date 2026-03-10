@@ -1,10 +1,12 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const { PORT } = require('./config/config');
 const rosService = require('./services/rosService');
 const apiRoutes = require('./routes/apiRoutes');
 
 // Initialisation
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 

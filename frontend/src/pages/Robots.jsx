@@ -1,30 +1,36 @@
+import { useContext } from 'react';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Card from '../components/common/Card';
-import { useState } from 'react';
 import { Circle } from 'lucide-react';
+import { RobotContext } from '../context/RobotContext';
 import './robots.css';
 
-const robotsData = [
-  { id: 1, name: 'NavBot-01', status: 'Online', battery: 87, location: 'Zone A', lastSeen: 'Now' },
-  { id: 2, name: 'NavBot-02', status: 'Offline', battery: 0, location: 'Charging Station', lastSeen: '5m ago' },
-  { id: 3, name: 'NavBot-03', status: 'Online', battery: 65, location: 'Zone B', lastSeen: 'Now' },
-  { id: 4, name: 'NavBot-04', status: 'Idle', battery: 92, location: 'Base', lastSeen: '2m ago' },
-  { id: 5, name: 'NavBot-05', status: 'Offline', battery: 0, location: 'Service', lastSeen: '1h ago' },
-];
-
 export default function Robots() {
-  const [selectedRobot, setSelectedRobot] = useState(null);
+  const { activeRobots, selectedRobotId, setSelectedRobotId } = useContext(RobotContext);
 
-  // Séparer les robots par statut
-  const onlineRobots = robotsData.filter(r => r.status === 'Online');
-  const idleRobots = robotsData.filter(r => r.status === 'Idle');
-  const offlineRobots = robotsData.filter(r => r.status === 'Offline');
+  // Adaptation des donnees brutes du backend pour l'interface utilisateur
+  // Les champs batterie et localisation seront mis a jour plus tard via la telemetrie
+  const formattedRobots = activeRobots.map(robot => ({
+    id: robot.id,
+    name: robot.id, // L'ID MQTT sert de nom par defaut
+    status: robot.status === 'online' ? 'Online' : 'Offline',
+    battery: '--',
+    location: 'En attente',
+    lastSeen: 'À l\'instant'
+  }));
+
+  const onlineRobots = formattedRobots.filter(r => r.status === 'Online');
+  const idleRobots = formattedRobots.filter(r => r.status === 'Idle');
+  const offlineRobots = formattedRobots.filter(r => r.status === 'Offline');
+
+  // Recuperation des donnees du robot actuellement selectionne
+  const selectedRobot = formattedRobots.find(r => r.id === selectedRobotId);
 
   const RobotRow = ({ robot }) => (
     <div
       key={robot.id}
-      className={`robot-row ${selectedRobot?.id === robot.id ? 'selected' : ''}`}
-      onClick={() => setSelectedRobot(robot)}
+      className={`robot-row ${selectedRobotId === robot.id ? 'selected' : ''}`}
+      onClick={() => setSelectedRobotId(robot.id)}
     >
       <div className="robot-name">
         <div className={`status-indicator status-${robot.status.toLowerCase()}`}></div>
@@ -35,8 +41,8 @@ export default function Robots() {
           <div
             className="battery-fill"
             style={{
-              width: `${robot.battery}%`,
-              backgroundColor: robot.battery > 50 ? '#22c55e' : robot.battery > 20 ? '#eab308' : '#ef4444',
+              width: robot.battery === '--' ? '0%' : `${robot.battery}%`,
+              backgroundColor: '#9ca3af', // Gris par defaut sans donnees
             }}
           ></div>
         </div>
@@ -44,17 +50,23 @@ export default function Robots() {
       </div>
       <div className="robot-location">{robot.location}</div>
       <div className="robot-lastseen">{robot.lastSeen}</div>
-      <button className="robot-action-btn" onClick={(e) => { e.stopPropagation(); alert(`Connecté à ${robot.name}`); }}>
-        Connecter
+      <button 
+        className="robot-action-btn" 
+        onClick={(e) => { 
+          e.stopPropagation(); 
+          setSelectedRobotId(robot.id);
+        }}
+      >
+        Sélectionner
       </button>
     </div>
   );
 
   return (
     <DashboardLayout>
-      <Card title={`Robots Fleet (${robotsData.length})`} span={2}>
+      <Card title={`Robots Fleet (${formattedRobots.length})`} span={2}>
         <div className="robots-list">
-          {/* Robots en ligne */}
+          
           <div className="robots-section">
             <h3 className="section-title online">
               <Circle size={16} fill="#22c55e" color="#22c55e" /> En ligne ({onlineRobots.length})
@@ -63,12 +75,11 @@ export default function Robots() {
               {onlineRobots.length > 0 ? (
                 onlineRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">Aucun robot en ligne</p>
+                <p className="empty-state">Aucun robot connecté au broker</p>
               )}
             </div>
           </div>
 
-          {/* Robots en attente */}
           <div className="robots-section">
             <h3 className="section-title idle">
               <Circle size={16} fill="#eab308" color="#eab308" /> En attente ({idleRobots.length})
@@ -82,7 +93,6 @@ export default function Robots() {
             </div>
           </div>
 
-          {/* Robots hors ligne */}
           <div className="robots-section">
             <h3 className="section-title offline">
               <Circle size={16} fill="#ef4444" color="#ef4444" /> Hors ligne ({offlineRobots.length})
@@ -91,14 +101,14 @@ export default function Robots() {
               {offlineRobots.length > 0 ? (
                 offlineRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">Aucun robot hors ligne</p>
+                <p className="empty-state">Historique vide</p>
               )}
             </div>
           </div>
+
         </div>
       </Card>
 
-      {/* Détails du robot sélectionné */}
       {selectedRobot && (
         <Card title={`Détails: ${selectedRobot.name}`} span={1}>
           <div className="robot-details">
@@ -110,7 +120,7 @@ export default function Robots() {
             </div>
             <div className="detail-row">
               <span>Batterie</span>
-              <strong>{selectedRobot.battery}%</strong>
+              <strong>{selectedRobot.battery}</strong>
             </div>
             <div className="detail-row">
               <span>Localisation</span>
@@ -120,7 +130,6 @@ export default function Robots() {
               <span>Dernier contact</span>
               <strong>{selectedRobot.lastSeen}</strong>
             </div>
-            <button className="detail-action-btn">Contrôler le robot</button>
           </div>
         </Card>
       )}

@@ -1,13 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
-import './telecommande.css'; // On réutilise volontairement la grille de la télécommande !
+import { RobotContext } from '../context/RobotContext';
+import './telecommande.css'; 
 
 export default function MapView() {
+  const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
+  
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
   const [posX, setPosX] = useState('0.00');
   const [posY, setPosY] = useState('0.00');
+  const [battery, setBattery] = useState('--.-');
 
   const moveInterval = useRef(null);
   const mapContainerRef = useRef(null);
@@ -19,7 +23,7 @@ export default function MapView() {
     fetch('/api/config')
       .then(res => res.json())
       .then(config => {
-        const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
+        const rosUrl = 'wss://ros.navbot.dev';
         const ros = new window.ROSLIB.Ros({ url: rosUrl });
         rosRef.current = ros;
 
@@ -44,14 +48,14 @@ export default function MapView() {
     viewerRef.current = new window.ROS2D.Viewer({
       divID: mapContainerRef.current.id,
       width: mapContainerRef.current.offsetWidth || 800,
-      height: 600, // Une zone de carte bien haute
+      height: 600, 
       background: '#1a1a1a'
     });
 
     gridClientRef.current = new window.ROS2D.OccupancyGridClient({
       ros: ros,
       rootObject: viewerRef.current.scene,
-      continuous: true // CRUCIAL POUR LE SLAM : Met à jour la carte en direct
+      continuous: true 
     });
 
     gridClientRef.current.on('change', () => {
@@ -61,11 +65,16 @@ export default function MapView() {
     });
 
     const robotMarker = new window.ROS2D.NavigationArrow({
-      size: 25, strokeSize: 1, fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
+      size: 0.8, 
+      strokeSize: 0.02, 
+      strokeColor: window.createjs.Graphics.getRGB(231, 76, 60, 1), 
+      fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), 
+      pulse: false
     });
     robotMarker.visible = false;
     viewerRef.current.scene.addChild(robotMarker);
 
+    // Topic Odométrie
     const odomListener = new window.ROSLIB.Topic({
       ros: ros,
       name: '/odom',
@@ -74,7 +83,8 @@ export default function MapView() {
 
     odomListener.subscribe((pose) => {
       robotMarker.x = pose.pose.pose.position.x;
-      robotMarker.y = pose.pose.pose.position.y;
+      robotMarker.y = -pose.pose.pose.position.y; 
+      
       const q = pose.pose.pose.orientation;
       const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
       const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
@@ -85,37 +95,76 @@ export default function MapView() {
       setPosX(pose.pose.pose.position.x.toFixed(2));
       setPosY(pose.pose.pose.position.y.toFixed(2));
     });
+
+    // Topic Batterie
+    const batteryListener = new window.ROSLIB.Topic({
+      ros: ros,
+      name: '/battery_state',
+      messageType: 'sensor_msgs/BatteryState'
+    });
+
+    batteryListener.subscribe((msg) => {
+      if (msg.voltage) {
+        setBattery(msg.voltage.toFixed(1));
+      }
+    });
   };
 
-  // --- ACTIONS SLAM (Appels à tes scripts bash) ---
-  const toggleSlam = (action) => {
-    setMapInfo(action === 'start' ? 'STARTING SLAM...' : 'STOPPING SLAM...');
-    const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
+  const startOrResetSlam = () => {
+    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+
+    setMapInfo('INITIALIZING SLAM NODE...');
+    fetch('/api/reset_slam', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotId: selectedRobotId })
+    })
+      .then(() => {
+        setTimeout(() => window.location.reload(), 5000); 
+      })
+      .catch(err => setMapInfo('ERROR SLAM RPC'));
+  };
+
+  const toggleBridge = (action) => {
+    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
     
-    fetch(endpoint, { method: 'POST' })
+    setMapInfo(action === 'start' ? 'STARTING ROSBRIDGE...' : 'STOPPING ROSBRIDGE...');
+    fetch(`/api/${action}_bridge`, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotId: selectedRobotId })
+    })
       .then(res => res.json())
       .then(data => {
-        if (data.status === 'success') {
-          setMapInfo(action === 'start' ? 'SLAM RUNNING' : 'SLAM STOPPED');
-          if (action === 'start') {
-            setTimeout(() => window.location.reload(), 2000); // Recharge la page pour accrocher le nouveau topic map
-          }
+        if (action === 'start') {
+          setTimeout(() => window.location.reload(), 3000);
+        } else {
+          setStatus('DISCONNECTED');
         }
       })
-      .catch(err => {
-        console.error(err);
-        setMapInfo('ERROR SLAM');
-      });
+      .catch(err => setMapInfo('ERROR BRIDGE RPC'));
   };
 
   const saveMap = () => {
-    setMapInfo('SAVING MAP...');
-    fetch('/api/save_map', { method: 'POST' })
+    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+
+    const mapName = window.prompt("Entrez un nom pour la map serveur (ex: zone_a) :");
+    if (!mapName || mapName.trim() === "") return;
+
+    setMapInfo('SERIALIZING MAP...');
+    fetch('/api/save_map', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        robotId: selectedRobotId, 
+        mapName: mapName.trim()
+      })
+    })
       .then(res => res.json())
       .then(data => {
         if (data.status === 'success') {
           setMapInfo('MAP SAVED !');
-          alert("Carte sauvegardée avec succès sur le serveur !");
+          alert(`Payload envoyé. La matrice de coût "${mapName}" est sauvegardée sur le disque du robot.`);
         } else {
           setMapInfo('SAVE FAILED');
         }
@@ -123,27 +172,18 @@ export default function MapView() {
       .catch(err => setMapInfo('ERROR SAVING'));
   };
 
-  const resetMap = () => {
-    setMapInfo('RESETTING SLAM...');
-    fetch('/api/reset_slam', { method: 'POST' })
-      .then(() => {
-        setTimeout(() => window.location.reload(), 5000); // Laisse 5 secondes au script bash pour relancer
-      })
-      .catch(err => setMapInfo('ERROR RESET'));
-  };
-
-  // --- CONTROLE MANUEL POUR LE SCAN ---
-  // On fixe les vitesses pour le mapping à 0.2 m/s et 0.8 rad/s comme dans ton ancienne version
   const sendCommand = (lin, ang) => {
+    if (!selectedRobotId) return;
+    
     fetch('/api/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ linear: lin * 0.2, angular: ang * 0.8 }) 
+      body: JSON.stringify({ robotId: selectedRobotId, linear: lin * 0.2, angular: ang * 0.8 }) 
     }).catch(e => console.error(e));
   };
 
   const startMove = (linMult, angMult) => {
-    if (moveInterval.current) return;
+    if (moveInterval.current || !isRobotOnline) return;
     sendCommand(linMult, angMult);
     moveInterval.current = setInterval(() => sendCommand(linMult, angMult), 200);
   };
@@ -153,63 +193,91 @@ export default function MapView() {
       clearInterval(moveInterval.current);
       moveInterval.current = null;
     }
-    fetch('/api/stop', { method: 'POST' });
+    if (!selectedRobotId) return;
+    
+    fetch('/api/stop', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotId: selectedRobotId })
+    });
   };
 
   return (
     <DashboardLayout>
       <div className="teleop-page">
         
-        {/* PANNEAU GAUCHE : La Carte */}
         <div className="teleop-col-left">
           <Card title={`SLAM Visualizer - Status : ${mapInfo}`}>
             <div 
               id="ros-map-container" 
               ref={mapContainerRef} 
               className="map-container" 
-              style={{ height: '600px' }}
             ></div>
           </Card>
         </div>
 
-        {/* PANNEAU DROIT : Contrôles du SLAM et Robot */}
         <div className="teleop-col-right">
           
-          <Card title="SLAM Controls">
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+          <Card title="Bridge Controls">
+            {!selectedRobotId && (
+              <div style={{ padding: '10px', background: '#f39c12', color: 'white', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
+                Veuillez sélectionner un robot
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
               <button 
-                style={{ flex: 1, padding: '15px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
-                onClick={() => toggleSlam('start')}
+                style={{ flex: 1, padding: '15px', background: '#8e44ad', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                onClick={() => toggleBridge('start')}
+                disabled={!isRobotOnline}
               >
-                START SLAM
+                START BRIDGE
               </button>
               <button 
-                style={{ flex: 1, padding: '15px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
-                onClick={() => toggleSlam('stop')}
+                style={{ flex: 1, padding: '15px', background: '#2c3e50', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                onClick={() => toggleBridge('stop')}
+                disabled={!isRobotOnline}
               >
-                STOP SLAM
+                STOP BRIDGE
               </button>
             </div>
-            
+          </Card>
+
+          <Card title="SLAM Controls">
             <button 
-              style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '10px' }} 
+              style={{ width: '100%', padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '10px', opacity: isRobotOnline ? 1 : 0.5 }} 
+              onClick={startOrResetSlam}
+              disabled={!isRobotOnline}
+            >
+              START / RESET SLAM
+            </button>
+            <button 
+              style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
               onClick={saveMap}
+              disabled={!isRobotOnline}
             >
               SAVE CURRENT MAP
             </button>
-            <button 
-              style={{ width: '100%', padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }} 
-              onClick={resetMap}
-            >
-              RESET SLAM
-            </button>
+          </Card>
+
+          <Card title="Telemetry">
+            <div className="telemetry-grid">
+              <div>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Position X</div>
+                <div className="telemetry-val">{posX}m</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Position Y</div>
+                <div className="telemetry-val">{posY}m</div>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Batterie</div>
+                <div className="telemetry-val battery-val">{battery} V</div>
+              </div>
+            </div>
           </Card>
 
           <Card title="Robot Override">
-            <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '15px' }}>
-              Utilisez les flèches pour déplacer le robot et scanner la zone.
-            </p>
-            <div className="teleop-pad" style={{ margin: 0 }}>
+            <div className={`teleop-pad ${!isRobotOnline ? 'blocked' : ''}`} style={{ margin: 0 }}>
               <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
               <div className="teleop-middle-row">
                 <button className="teleop-btn left" onMouseDown={() => startMove(0, 1)} onMouseUp={stopMove} onMouseLeave={stopMove}>◀</button>
@@ -223,7 +291,17 @@ export default function MapView() {
           <Card title="System Connection">
             <ul className="teleop-list">
               <li>
-                <span>Connection</span>
+                <span>Robot Target</span>
+                <strong>{selectedRobotId || "Aucun"}</strong>
+              </li>
+              <li>
+                <span>Broker MQTT</span>
+                <strong className={`status-val ${isRobotOnline ? 'connected' : 'disconnected'}`}>
+                  {isRobotOnline ? 'ONLINE' : 'OFFLINE'}
+                </strong>
+              </li>
+              <li>
+                <span>Data Bridge (ROS)</span>
                 <strong className={`status-val ${status === 'CONNECTED' ? 'connected' : 'disconnected'}`}>
                   {status}
                 </strong>

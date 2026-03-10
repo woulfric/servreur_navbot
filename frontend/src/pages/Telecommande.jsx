@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
+import { RobotContext } from '../context/RobotContext';
 import './telecommande.css';
 
 export default function Telecommande() {
+  const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
+
   const [battery, setBattery] = useState('--');
   const [posX, setPosX] = useState('0.00');
   const [posY, setPosY] = useState('0.00');
@@ -25,7 +28,8 @@ export default function Telecommande() {
     fetch('/api/config')
       .then(res => res.json())
       .then(config => {
-        const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
+        // const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
+        const rosUrl = 'wss://ros.navbot.dev';
         const ros = new window.ROSLIB.Ros({ url: rosUrl });
         rosRef.current = ros;
 
@@ -107,16 +111,16 @@ export default function Telecommande() {
   };
 
   const sendCommand = (lin, ang) => {
-    if (isEmergency) return;
+    if (isEmergency || !selectedRobotId) return;
     fetch('/api/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ linear: lin, angular: ang })
+      body: JSON.stringify({ robotId: selectedRobotId, linear: lin, angular: ang })
     }).catch(e => console.error(e));
   };
 
   const startMove = (linMult, angMult) => {
-    if (isEmergency || moveInterval.current) return;
+    if (isEmergency || moveInterval.current || !isRobotOnline) return;
     const lin = linearSpeed * linMult;
     const ang = angularSpeed * angMult;
     sendCommand(lin, ang);
@@ -128,16 +132,24 @@ export default function Telecommande() {
       clearInterval(moveInterval.current);
       moveInterval.current = null;
     }
-    fetch('/api/stop', { method: 'POST' });
+    if (!selectedRobotId) return;
+
+    fetch('/api/stop', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotId: selectedRobotId })
+    });
   };
 
   const toggleEmergency = () => {
+    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+
     const newState = !isEmergency;
     setIsEmergency(newState);
     fetch('/api/emergency', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: newState ? 'on' : 'off' })
+      body: JSON.stringify({ robotId: selectedRobotId, state: newState ? 'on' : 'off' })
     });
     if (newState) stopMove();
   };
@@ -146,7 +158,6 @@ export default function Telecommande() {
     <DashboardLayout>
       <div className="teleop-page">
         
-        {/* PANNEAU GAUCHE */}
         <div className="teleop-col-left">
           <Card title="Live Camera Feed">
             <div className="video-container">
@@ -163,7 +174,6 @@ export default function Telecommande() {
           </Card>
         </div>
 
-        {/* PANNEAU DROIT */}
         <div className="teleop-col-right">
           
           <div className="telemetry-grid">
@@ -180,7 +190,12 @@ export default function Telecommande() {
           </div>
 
           <Card title="Manual Control">
-            <div className={isEmergency ? 'blocked' : ''}>
+            {!selectedRobotId && (
+              <div style={{ padding: '10px', background: '#f39c12', color: 'white', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
+                Veuillez sélectionner un robot
+              </div>
+            )}
+            <div className={isEmergency || !isRobotOnline ? 'blocked' : ''}>
               
               <div className="teleop-pad">
                 <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
@@ -216,7 +231,17 @@ export default function Telecommande() {
           <Card title="System Status">
             <ul className="teleop-list">
               <li>
-                <span>Connection</span>
+                <span>Robot Cible</span>
+                <strong>{selectedRobotId || "Aucun"}</strong>
+              </li>
+              <li>
+                <span>Broker MQTT</span>
+                <strong className={`status-val ${isRobotOnline ? 'connected' : 'disconnected'}`}>
+                  {isRobotOnline ? 'ONLINE' : 'OFFLINE'}
+                </strong>
+              </li>
+              <li>
+                <span>Data Bridge (ROS)</span>
                 <strong className={`status-val ${status === 'CONNECTED' ? 'connected' : 'disconnected'}`}>
                   {status}
                 </strong>
@@ -225,6 +250,8 @@ export default function Telecommande() {
             <button 
               className={`btn-emergency ${isEmergency ? 'active' : ''}`} 
               onClick={toggleEmergency}
+              disabled={!isRobotOnline}
+              style={{ opacity: isRobotOnline ? 1 : 0.5 }}
             >
               {isEmergency ? "UNLOCK SYSTEM" : "EMERGENCY STOP"}
             </button>
