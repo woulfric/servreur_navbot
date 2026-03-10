@@ -1,4 +1,4 @@
-image: /tmp/map_2026-02-10_23-08-31.pgm
+image: /home/ubuntu/catkin_ws/src/navbot_bridge/scripts/maps/appartement_kamel_v0.pgm
 resolution: 0.050000
 origin: [-10.000000, -10.000000, 0.000000]
 negate: 0

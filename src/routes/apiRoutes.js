@@ -14,5 +14,7 @@ router.get('/maps', robotController.getMaps);
 router.post('/load_map', robotController.loadMap);
 router.post('/start_slam', robotController.startSlam);
 router.post('/stop_slam', robotController.stopSlam);
+router.post('/start_bridge', robotController.startBridge);
+router.post('/stop_bridge', robotController.stopBridge);
 
 module.exports = router;

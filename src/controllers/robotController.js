@@ -1,4 +1,6 @@
 const mqttService = require('../services/mqttService');
+const fs = require('fs');
+const path = require('path');
 
 const getActiveRobots = (req, res) => {
   const robots = mqttService.getActiveRobots();
@@ -54,9 +56,40 @@ const saveMap = (req, res) => {
 };
 
 const getMaps = (req, res) => {
-  res.json({ maps: [] });
-};
+  const mapsDir = path.join(__dirname, '../../public/maps'); 
+  
+  try {
+    if (!fs.existsSync(mapsDir)) {
+      return res.json({ maps: [] });
+    }
 
+    const files = fs.readdirSync(mapsDir);
+    // On se base sur les fichiers .yaml pour lister les cartes (1 yaml = 1 carte)
+    const yamlFiles = files.filter(f => f.endsWith('.yaml'));
+
+    const mapsList = yamlFiles.map((file, index) => {
+      const baseName = file.replace('.yaml', '');
+      const filePath = path.join(mapsDir, file);
+      const stats = fs.statSync(filePath);
+
+      return {
+        id: index + 1,
+        name: baseName,
+        description: 'Carte générée par le robot',
+        size: (stats.size / 1024).toFixed(1) + ' KB', 
+        created: stats.birthtime.toISOString().split('T')[0],
+        lastModified: stats.mtime.toISOString().split('T')[0],
+        robotCount: 0,
+        pointsCount: 'N/A'
+      };
+    });
+
+    res.json({ maps: mapsList });
+  } catch (error) {
+    console.error("Erreur lecture dossier maps:", error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
 const loadMap = (req, res) => {
   const { robotId, mapName } = req.body;
   if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
@@ -81,7 +114,6 @@ const resetSlam = (req, res) => {
   res.json({ status: 'success', message: 'Reset publie' });
 };
 
-
 const stopSlam = (req, res) => {
   const { robotId } = req.body;
   if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
@@ -90,7 +122,21 @@ const stopSlam = (req, res) => {
   res.json({ status: 'success', message: 'Stop SLAM publie' });
 };
 
+const startBridge = (req, res) => {
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
 
+  mqttService.publishSystemCommand(robotId, 'start_bridge');
+  res.json({ status: 'success', message: 'Start Bridge publie' });
+};
+
+const stopBridge = (req, res) => {
+  const { robotId } = req.body;
+  if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
+
+  mqttService.publishSystemCommand(robotId, 'stop_bridge');
+  res.json({ status: 'success', message: 'Stop Bridge publie' });
+};
 
 module.exports = {
   getActiveRobots,
@@ -104,5 +150,7 @@ module.exports = {
   getMaps,
   loadMap,
   startSlam,
-  stopSlam
+  stopSlam,
+  startBridge, 
+  stopBridge    
 };

@@ -9,6 +9,7 @@ export default function MapView() {
   
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
+  // Nouveaux states pour la télémétrie
   const [posX, setPosX] = useState('0.00');
   const [posY, setPosY] = useState('0.00');
   const [battery, setBattery] = useState('--.-');
@@ -110,10 +111,36 @@ export default function MapView() {
     });
   };
 
-  const startOrResetSlam = () => {
+  const toggleSlam = (action) => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    
+    setMapInfo(action === 'start' ? 'STARTING SLAM...' : 'STOPPING SLAM...');
+    const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
+    
+    fetch(endpoint, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ robotId: selectedRobotId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setMapInfo(action === 'start' ? 'SLAM RUNNING' : 'SLAM STOPPED');
+          if (action === 'start') {
+            setTimeout(() => window.location.reload(), 2000); 
+          }
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setMapInfo('ERROR SLAM');
+      });
+  };
 
-    setMapInfo('INITIALIZING SLAM NODE...');
+  const resetMap = () => {
+    if (!selectedRobotId) return;
+
+    setMapInfo('RESETTING SLAM...');
     fetch('/api/reset_slam', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -122,9 +149,10 @@ export default function MapView() {
       .then(() => {
         setTimeout(() => window.location.reload(), 5000); 
       })
-      .catch(err => setMapInfo('ERROR SLAM RPC'));
+      .catch(err => setMapInfo('ERROR RESET'));
   };
 
+  // Nouvelle fonction pour contrôler le Bridge
   const toggleBridge = (action) => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
     
@@ -148,10 +176,10 @@ export default function MapView() {
   const saveMap = () => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
 
-    const mapName = window.prompt("Entrez un nom pour la map serveur (ex: zone_a) :");
+    const mapName = window.prompt("Entrez un nom pour cette carte (ex: zone_a) :");
     if (!mapName || mapName.trim() === "") return;
 
-    setMapInfo('SERIALIZING MAP...');
+    setMapInfo('SAVING MAP...');
     fetch('/api/save_map', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -164,7 +192,7 @@ export default function MapView() {
       .then(data => {
         if (data.status === 'success') {
           setMapInfo('MAP SAVED !');
-          alert(`Payload envoyé. La matrice de coût "${mapName}" est sauvegardée sur le disque du robot.`);
+          alert(`Ordre envoyé ! La carte "${mapName}" est en cours de sauvegarde sur le robot.`);
         } else {
           setMapInfo('SAVE FAILED');
         }
@@ -218,6 +246,7 @@ export default function MapView() {
 
         <div className="teleop-col-right">
           
+          {/* Nouveaux contrôles du Bridge */}
           <Card title="Bridge Controls">
             {!selectedRobotId && (
               <div style={{ padding: '10px', background: '#f39c12', color: 'white', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
@@ -242,14 +271,25 @@ export default function MapView() {
             </div>
           </Card>
 
+          {/* SLAM Controls fusionnés */}
           <Card title="SLAM Controls">
-            <button 
-              style={{ width: '100%', padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '10px', opacity: isRobotOnline ? 1 : 0.5 }} 
-              onClick={startOrResetSlam}
-              disabled={!isRobotOnline}
-            >
-              START / RESET SLAM
-            </button>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+              <button 
+                style={{ flex: 1, padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                onClick={resetMap}
+                disabled={!isRobotOnline}
+              >
+                START / RESET SLAM
+              </button>
+              <button 
+                style={{ flex: 1, padding: '15px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                onClick={() => toggleSlam('stop')}
+                disabled={!isRobotOnline}
+              >
+                STOP SLAM
+              </button>
+            </div>
+            
             <button 
               style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
               onClick={saveMap}
@@ -259,24 +299,28 @@ export default function MapView() {
             </button>
           </Card>
 
+          {/* Nouvelle carte Télémétrie */}
           <Card title="Telemetry">
             <div className="telemetry-grid">
               <div>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Position X</div>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Position X</div>
                 <div className="telemetry-val">{posX}m</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Position Y</div>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Position Y</div>
                 <div className="telemetry-val">{posY}m</div>
               </div>
-              <div style={{ gridColumn: 'span 2' }}>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>Batterie</div>
+              <div style={{ gridColumn: 'span 2', marginTop: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Batterie</div>
                 <div className="telemetry-val battery-val">{battery} V</div>
               </div>
             </div>
           </Card>
 
           <Card title="Robot Override">
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+              Utilisez les flèches pour déplacer le robot et scanner la zone.
+            </p>
             <div className={`teleop-pad ${!isRobotOnline ? 'blocked' : ''}`} style={{ margin: 0 }}>
               <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
               <div className="teleop-middle-row">
@@ -291,7 +335,7 @@ export default function MapView() {
           <Card title="System Connection">
             <ul className="teleop-list">
               <li>
-                <span>Robot Target</span>
+                <span>Robot Cible</span>
                 <strong>{selectedRobotId || "Aucun"}</strong>
               </li>
               <li>

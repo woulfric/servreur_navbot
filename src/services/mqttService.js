@@ -1,4 +1,7 @@
 const mqtt = require('mqtt');
+const zlib = require('zlib');
+const fs = require('fs');
+const path = require('path');
 
 const client = mqtt.connect('mqtt://localhost:1883');
 // const client = mqtt.connect('mqtt://broker.hivemq.com:1883');
@@ -9,6 +12,7 @@ client.on('connect', () => {
   
   client.subscribe('navbot/+/telemetry');
   client.subscribe('navbot/+/status');
+  client.subscribe('navbot/+/map_upload');
 });
 
 client.on('message', (topic, message) => {
@@ -27,6 +31,32 @@ client.on('message', (topic, message) => {
       });
     } else {
       activeRobots.delete(robotId);
+    }
+  }
+
+  // Traitement de la reception de la carte compressee
+  if (parts.length === 3 && parts[2] === 'map_upload') {
+    try {
+      const payload = JSON.parse(message.toString());
+      const { mapName, pgm, yaml } = payload;
+
+      // Definition du dossier de destination sur le serveur
+      const targetDir = path.join(__dirname, '../../public/maps'); 
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // Decodage Base64 et decompression zlib
+      const pgmBuffer = zlib.unzipSync(Buffer.from(pgm, 'base64'));
+      const yamlBuffer = zlib.unzipSync(Buffer.from(yaml, 'base64'));
+
+      // Ecriture des fichiers sur le disque
+      fs.writeFileSync(path.join(targetDir, `${mapName}.pgm`), pgmBuffer);
+      fs.writeFileSync(path.join(targetDir, `${mapName}.yaml`), yamlBuffer);
+
+      console.log(`[MQTT] Carte "${mapName}" recue, decompressee et sauvegardee avec succes.`);
+    } catch (err) {
+      console.error("[MQTT] Erreur lors du traitement de la carte :", err);
     }
   }
 });
