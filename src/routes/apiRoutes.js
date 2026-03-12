@@ -17,4 +17,10 @@ router.post('/stop_slam', robotController.stopSlam);
 router.post('/start_bridge', robotController.startBridge);
 router.post('/stop_bridge', robotController.stopBridge);
 
+router.post('/poi-maps', robotController.savePoiMap);
+router.get('/poi-maps', robotController.listPoiMaps);
+router.get('/poi-maps/:mapName', robotController.getPoiMap);
+
+router.post('/start_mission', robotController.startMission);
+
 module.exports = router;

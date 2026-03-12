@@ -1,0 +1,54 @@
+{
+  "mapName": "appartement_kamel_v0_copy",
+  "metadata": {
+    "image": "/home/ubuntu/catkin_ws/src/navbot_bridge/scripts/maps/appartement_kamel_v0.pgm",
+    "resolution": 0.05,
+    "origin": [
+      -10,
+      -10,
+      0
+    ],
+    "negate": 0,
+    "occupied_thresh": 0.65,
+    "free_thresh": 0.196
+  },
+  "pois": [
+    {
+      "id": "0c059d20-a81b-4665-9025-5e9fa581a998",
+      "name": "POI 1",
+      "type": "Zone",
+      "x": 0.982,
+      "y": 0.562,
+      "description": "",
+      "priority": "Medium",
+      "status": "Active",
+      "visits": 0,
+      "created": "2026-03-11"
+    },
+    {
+      "id": "db502015-98c3-4f0b-8d93-a519d4891f20",
+      "name": "POI 2",
+      "type": "Zone",
+      "x": -2.498,
+      "y": 1.099,
+      "description": "",
+      "priority": "Medium",
+      "status": "Active",
+      "visits": 0,
+      "created": "2026-03-11"
+    },
+    {
+      "id": "3c35cd8f-b2be-4c6c-a038-ec42d6a18e70",
+      "name": "POI 3",
+      "type": "Zone",
+      "x": -0.85,
+      "y": -0.826,
+      "description": "",
+      "priority": "Medium",
+      "status": "Active",
+      "visits": 0,
+      "created": "2026-03-11"
+    }
+  ],
+  "updatedAt": "2026-03-11T22:52:23.543Z"
+}
