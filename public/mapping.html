@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>TB4 Cockpit - Mapping</title>
+    
+    <script src="https://code.createjs.com/1.0.0/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0.10.0/build/ros2d.min.js"></script>
+
+    <style>
+        /* --- STYLE GLOBAL --- */
+        body { 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background: #0f0f0f; 
+            color: #eee; 
+            margin: 0; 
+            display: flex; 
+            height: 100vh; 
+            width: 100vw; 
+            overflow: hidden; 
+        }
+
+        /* --- PANNEAU GAUCHE (CARTE) --- */
+        .left-panel {
+            flex: 1; 
+            display: flex; 
+            flex-direction: column;
+            border-right: 2px solid #333;
+            background: #111;
+            position: relative;
+        }
+
+        .map-header {
+            padding: 15px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            color: #00ffcc;
+            font-family: monospace;
+            letter-spacing: 2px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        #map-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: #111;
+        }
+
+        #ros-map {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* --- PANNEAU DROITE (COMMANDES) --- */
+        .right-panel {
+            width: 350px;
+            background: #181818;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        }
+
+        h3 { 
+            margin: 0 0 20px 0; 
+            font-weight: 300; 
+            letter-spacing: 3px; 
+            text-align: center; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .status-card {
+            background: #252525;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #f39c12;
+            margin-bottom: 20px;
+        }
+
+        .status-label {
+            font-size: 10px; 
+            color: #888; 
+            margin-bottom: 5px; 
+            text-transform: uppercase;
+        }
+
+        .status-val {
+            font-size: 16px; 
+            font-family: monospace; 
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        /* --- GRILLE DE CONTROLE --- */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button.ctrl-btn { 
+            background: #333; 
+            border: 1px solid #444; 
+            color: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            font-size: 20px; 
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        
+        button.ctrl-btn:active { 
+            background: #555; 
+            transform: scale(0.95); 
+        }
+
+        /* --- BOUTONS SPECIAUX --- */
+        .reset-btn {
+            background: #d35400;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+            margin-top: auto;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        .reset-btn:active { background: #e67e22; }
+
+        .menu-btn {
+            padding: 15px;
+            background: #34495e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        .menu-btn:hover { background: #2c3e50; }
+
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin: 10px 0;
+            line-height: 1.4;
+        }
+        .save-btn {
+            background: #27ae60; 
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px; 
+            margin-top: auto;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            width: 100%; 
+        }
+        .save-btn:active { background: #219150; }
+        .save-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+
+        .slam-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .slam-btn.start { background: #27ae60; }
+        .slam-btn.start:active { background: #219150; }
+        
+        .slam-btn.stop { background: #c0392b; }
+        .slam-btn.stop:active { background: #a93226; }
+    </style>
+</head>
+<body>
+
+    <div class="left-panel">
+        <div class="map-header">
+            <span>SLAM VISUALIZER</span>
+            <span id="map-info" style="color: #666;">WAITING DATA...</span>
+        </div>
+        <div id="map-container">
+            <div id="ros-map"></div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <h3>MAPPING MODE</h3>
+        <div class="slam-controls" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="slam-btn start" onclick="toggleSlam('start')">START SLAM</button>
+            <button class="slam-btn stop" onclick="toggleSlam('stop')">STOP SLAM</button>
+        </div>
+
+        <div class="status-card">
+            <div class="status-label">Bridge Connection</div>
+            <div id="status" class="status-val">CONNECTING...</div>
+        </div>
+
+        <p class="info-text">
+            Utilisez les fleches pour scanner la zone.<br>
+            Le robot est represente par le triangle rouge.
+        </p>
+
+        <div class="controls-grid">
+            <button class="ctrl-btn" style="grid-column: 2;" onmousedown="move(1,0)" onmouseup="stop()" onmouseleave="stop()">▲</button>
+            <button class="ctrl-btn" style="grid-column: 1; grid-row: 2;" onmousedown="move(0,1)" onmouseup="stop()" onmouseleave="stop()">◀</button>
+            <button class="ctrl-btn" style="grid-column: 2; grid-row: 2;" onmousedown="move(-1,0)" onmouseup="stop()" onmouseleave="stop()">▼</button>
+            <button class="ctrl-btn" style="grid-column: 3; grid-row: 2;" onmousedown="move(0,-1)" onmouseup="stop()" onmouseleave="stop()">▶</button>
+        </div>
+
+
+        <button class="save-btn" onclick="saveMap()">SAVE MAP</button>
+        <button class="reset-btn" onclick="resetMap()">RESET MAP</button>
+        <button class="menu-btn" onclick="window.location.href='index.html'">RETOUR MENU</button>
+    </div>
+
+    <script>
+        let ros = null; 
+        let viewer = null;
+        let gridClient = null;
+        let robotMarker = null;
+
+        async function startSystem() {
+            try {
+                const response = await fetch(window.location.origin + '/api/config');
+                
+                if (!response.ok) throw new Error("Erreur config");
+                
+                const config = await response.json();
+
+                console.log("Config recue du serveur :", config);
+
+                let rosUrl = '';
+
+                if (config.ROSBRIDGE_URL) {
+                    rosUrl = config.ROSBRIDGE_URL;
+                } else if (config.robotIP) {
+                    rosUrl = `ws://${config.robotIP}:${config.rosPort || '9090'}`;
+                } else {
+                    rosUrl = 'ws://' + window.location.hostname + ':9090';
+                }
+
+                console.log('Connexion vers :', rosUrl);
+                connectToRos(rosUrl);
+
+            } catch (err) {
+                console.error("Echec chargement config, utilisation de localhost", err);
+                connectToRos('ws://' + window.location.hostname + ':9090');
+            }
+        }
+
+        function connectToRos(url) {
+            ros = new ROSLIB.Ros({
+                url: url
+            });
+
+            ros.on('connection', () => {
+                document.getElementById('status').innerText = "ONLINE";
+                document.getElementById('status').style.color = "#2ecc71";
+                document.querySelector('.status-card').style.borderColor = "#2ecc71";
+                
+                setTimeout(initMap, 500);
+            });
+
+            ros.on('error', (err) => {
+                document.getElementById('status').innerText = "OFFLINE";
+                document.getElementById('status').style.color = "#e74c3c";
+                document.querySelector('.status-card').style.borderColor = "#e74c3c";
+            });
+        }
+
+        function initMap() {
+            const container = document.getElementById('map-container');
+            
+            container.innerHTML = '<div id="ros-map"></div>';
+
+            viewer = new ROS2D.Viewer({
+                divID: 'ros-map',
+                width: container.offsetWidth,
+                height: container.offsetHeight,
+                background: '#111111'
+            });
+
+            gridClient = new ROS2D.OccupancyGridClient({
+                ros: ros,
+                rootObject: viewer.scene,
+                continuous: true 
+            });
+
+            gridClient.on('change', () => {
+                document.getElementById('map-info').innerText = "GRID RECEIVED";
+                viewer.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
+                viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
+            });
+
+  
+            robotMarker = new createjs.Shape();
+            robotMarker.graphics.beginFill("#e74c3c").drawPolyStar(0, 0, 0.3, 3, 0, -90); // Triangle pointe vers l'avant
+            
+            robotMarker.visible = false;
+            viewer.scene.addChild(robotMarker);
+
+            // --- ABONNEMENT A L'ODOMETRIE ---
+            const odomTopic = new ROSLIB.Topic({
+                ros: ros,
+                name: '/odom',
+                messageType: 'nav_msgs/Odometry'
+            });
+
+            odomTopic.subscribe((message) => {
+                // Mise a jour de la position (X, Y)
+                robotMarker.x = message.pose.pose.position.x;
+                robotMarker.y = message.pose.pose.position.y;
+
+                const q = message.pose.pose.orientation;
+                const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+                const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+                const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                robotMarker.rotation = -yaw * (180.0 / Math.PI);
+                
+                robotMarker.visible = true;
+            });
+        }
+
+        function resetMap() {
+            const btn = document.querySelector('.reset-btn');
+            const originalText = btn.innerText;
+
+            // Feedback visuel
+            btn.innerText = "REDÉMARRAGE...";
+            btn.style.backgroundColor = "#e74c3c";
+            document.getElementById('map-info').innerText = "RESETTING SLAM...";
+        
+            // Appel API
+            fetch(window.location.origin + '/api/reset_slam', { method: 'POST' })
+                .then(() => {
+                    // On attend un peu que le SLAM redémarre (5 secondes)
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.style.backgroundColor = "#d35400"; 
+                        window.location.reload(); 
+                    }, 5000);
+                })
+                .catch(err => {
+                    console.error(err);
+                    btn.innerText = "ERREUR";
+                });
+        }
+
+        function saveMap() {
+            const btn = document.querySelector('.save-btn');
+            const originalText = btn.innerText;
+                
+            // Feedback visuel
+            btn.innerText = "SAUVEGARDE EN COURS...";
+            btn.disabled = true; // On désactive le bouton pour éviter de cliquer 2 fois
+                
+            fetch(window.location.origin + '/api/save_map', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert("Carte sauvegardée avec succès !");
+                    console.log(data.details);
+                } else {
+                    alert("Erreur lors de la sauvegarde.");
+                }
+                btn.innerText = originalText;
+                btn.disabled = false;
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur réseau");
+                btn.innerText = originalText;
+                btn.disabled = false;
+            });
+        }
+
+        function toggleSlam(action) {
+            const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
+            const btn = document.querySelector(`.slam-btn.${action}`);
+            const originalText = btn.innerText;
+
+            btn.innerText = "...";
+            
+            fetch(window.location.origin + endpoint, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    console.log(data);
+                    if(data.status === 'success') {
+                        btn.innerText = action === 'start' ? "RUNNING" : "STOPPED";
+                        setTimeout(() => { 
+                            btn.innerText = originalText; 
+                            if(action === 'start') window.location.reload(); // Recharger pour voir la map
+                        }, 2000);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    btn.innerText = "ERROR";
+                    setTimeout(() => btn.innerText = originalText, 2000);
+                });
+        }
+
+        let moveInterval = null;
+
+        function move(lin, ang) {
+            if (moveInterval) return;
+
+            const url = window.location.origin + '/api/move';
+            
+            const sendCommand = () => {
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linear: lin * 0.2, angular: ang * 0.8 })
+                }).catch(e => console.error(e));
+            };
+
+            sendCommand();
+            moveInterval = setInterval(sendCommand, 200);
+        }
+
+        function stop() {
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+            const url = window.location.origin + '/api/stop';
+            fetch(url, { method: 'POST' }).catch(e => console.error(e));
+        }
+
+        startSystem();
+    </script>
+</body>
+</html>

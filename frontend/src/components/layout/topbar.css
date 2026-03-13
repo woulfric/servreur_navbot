@@ -1,0 +1,120 @@
+.topbar {
+  height: 60px;
+  min-height: 60px;
+  max-height: 60px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  backdrop-filter: blur(10px);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.topbar-placeholder {
+  width: 20px;
+}
+
+.topbar-menu-btn {
+  display: none;
+  align-items: center;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.menu-button:hover {
+  background: var(--button-hover-bg);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 16px;
+  opacity: 1;
+  align-items: center;
+  margin-left: auto;
+}
+
+.theme-toggle,
+.notifications-button,
+.profile-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+  position: relative;
+}
+
+.theme-toggle:hover,
+.notifications-button:hover,
+.profile-button:hover {
+  background: var(--button-hover-bg);
+  opacity: 1;
+}
+
+.theme-toggle:active,
+.notifications-button:active,
+.profile-button:active {
+  transform: scale(0.95);
+}
+
+/* Tablet (481px - 768px) */
+@media (max-width: 768px) {
+  .topbar {
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+    padding: 0 16px;
+    overflow: hidden;
+  }
+
+  .topbar-actions {
+    gap: 12px;
+  }
+}
+
+/* Mobile (< 480px) */
+@media (max-width: 480px) {
+  .topbar {
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    padding: 0 12px;
+    overflow: hidden;
+  }
+
+  .topbar-placeholder {
+    width: 16px;
+  }
+
+  .topbar-menu-btn {
+    display: flex;
+  }
+
+  .topbar-actions {
+    gap: 8px;
+  }
+
+  .menu-button {
+    padding: 4px;
+  }
+}

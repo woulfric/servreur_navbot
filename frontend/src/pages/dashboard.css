@@ -1,0 +1,557 @@
+/* Statistiques principales */
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid;
+  transition: all 0.3s ease;
+}
+
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.stat-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-box.stat-total {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.1) 0%, rgba(148, 163, 184, 0.05) 100%);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.stat-box.stat-total .stat-value {
+  color: var(--text-tertiary);
+}
+
+.stat-box.stat-online {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.stat-box.stat-online .stat-value {
+  color: var(--accent-primary);
+}
+
+.stat-box.stat-missions {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.stat-box.stat-missions .stat-value {
+  color: var(--accent-primary);
+}
+
+.stat-box.stat-success {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.stat-box.stat-success .stat-value {
+  color: #a855f7;
+}
+
+/* État des robots */
+.robots-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.robot-status-card {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(226, 232, 240, 0.02);
+  border: 1px solid rgba(34, 197, 94, 0.1);
+  transition: all 0.3s ease;
+}
+
+.robot-status-card:hover {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+  transform: translateY(-2px);
+}
+
+.robot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(34, 197, 94, 0.1);
+}
+
+.robot-name {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.robot-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.robot-badge.status-online {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--accent-primary);
+}
+
+.robot-badge.status-idle {
+  background: rgba(234, 179, 8, 0.2);
+  color: #eab308;
+}
+
+.robot-badge.status-offline {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text-tertiary);
+}
+
+.robot-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.robot-stat:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  font-size: 10px;
+}
+
+.stat-value-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0 8px;
+  min-width: 60px;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.bar-fill.battery-high {
+  background: var(--accent-primary);
+}
+
+.bar-fill.battery-medium {
+  background: #eab308;
+}
+
+.bar-fill.battery-low {
+  background: #ef4444;
+}
+
+.stat-text {
+  color: var(--text-light);
+  font-weight: 600;
+  min-width: 45px;
+  text-align: right;
+  font-size: 12px;
+}
+
+/* Missions en cours */
+.missions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mission-item {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(226, 232, 240, 0.02);
+  border: 1px solid rgba(34, 197, 94, 0.1);
+  transition: all 0.2s ease;
+}
+
+.mission-item:hover {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.mission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mission-header strong {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mission-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.mission-status.mission-running {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--accent-primary);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.mission-status.mission-completed {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--accent-primary);
+}
+
+.mission-status.mission-queued {
+  background: rgba(234, 179, 8, 0.2);
+  color: #eab308;
+}
+
+.mission-robot {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.mission-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  min-width: 35px;
+  text-align: right;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 16px;
+  color: #64748b;
+  font-size: 12px;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Alertes récentes */
+.alerts-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  border-left: 4px solid;
+  background: rgba(226, 232, 240, 0.02);
+  transition: all 0.2s ease;
+}
+
+.alert-item:hover {
+  background: rgba(226, 232, 240, 0.04);
+}
+
+.alert-marker {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.alert-item.alert-error {
+  border-left-color: #ef4444;
+}
+
+.alert-item.alert-warning {
+  border-left-color: #eab308;
+}
+
+.alert-item.alert-info {
+  border-left-color: #3b82f6;
+}
+
+.alert-content {
+  flex: 1;
+}
+
+.alert-message {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.alert-time {
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* Aperçu de la carte */
+.map-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.preview-svg {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.map-info {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.map-info span {
+  flex: 1;
+  text-align: center;
+}
+
+/* Système */
+.system-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.system-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(226, 232, 240, 0.02);
+  border: 1px solid rgba(34, 197, 94, 0.1);
+  font-size: 12px;
+}
+
+.system-item span:first-child {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.system-value {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.system-value.online {
+  color: var(--accent-primary);
+}
+
+/* Responsive */
+/* Extra Large Desktop (> 1440px) */
+@media (min-width: 1441px) {
+  .dashboard-stats,
+  .robots-status-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .robots-status-grid {
+    max-height: 400px;
+  }
+}
+
+/* Large Desktop (1025px - 1440px) */
+@media (max-width: 1400px) {
+  .dashboard-stats,
+  .robots-status-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .robots-status-grid {
+    max-height: 450px;
+  }
+}
+
+/* Small Desktop (769px - 1024px) */
+@media (max-width: 1024px) {
+  .dashboard-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .robots-status-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-height: 500px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+}
+
+/* Tablet (481px - 768px) */
+@media (max-width: 768px) {
+  .dashboard-stats,
+  .robots-status-grid {
+    grid-template-columns: 1fr;
+    max-height: 500px;
+  }
+
+  .robot-stat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .stat-value-bar {
+    width: 100%;
+    margin: 0;
+  }
+
+  .stat-box {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+  }
+}
+
+/* Mobile (< 480px) */
+@media (max-width: 480px) {
+  .dashboard-stats,
+  .robots-status-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-height: 450px;
+  }
+
+  .stat-box {
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .stat-icon {
+    font-size: 20px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .stat-label {
+    font-size: 8px;
+  }
+
+  .robot-stat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .stat-value-bar {
+    width: 100%;
+    margin: 0;
+  }
+
+  .robot-status-card {
+    padding: 10px;
+  }
+
+  .robot-header {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+
+  .missions-panel {
+    gap: 8px;
+  }
+
+  .mission-item {
+    padding: 10px;
+  }
+}

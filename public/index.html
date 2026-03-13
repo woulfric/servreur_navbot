@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>TB4 Cockpit - Menu</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #eee; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .menu-container { text-align: center; background: #181818; padding: 50px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
+        h1 { letter-spacing: 5px; margin-bottom: 40px; color: #fff; }
+        .nav-box { display: flex; gap: 20px; }
+        .nav-card {
+            background: #252525; padding: 30px; border-radius: 8px; width: 200px;
+            cursor: pointer; transition: 0.3s; border: 2px solid transparent; text-decoration: none; color: inherit;
+        }
+        .nav-card:hover { background: #333; border-color: #3498db; transform: translateY(-5px); }
+        .icon { font-size: 40px; margin-bottom: 15px; display: block; }
+        .title { font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <h1>TURTLEBOT 4 <span style="color: #3498db;">SSIO</span></h1>
+        <div class="nav-box">
+            <a href="control.html" class="nav-card">
+                <span class="title">Contrôle Manuel</span>
+            </a>
+            <a href="mapping.html" class="nav-card">
+                <span class="title">Cartographie</span>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

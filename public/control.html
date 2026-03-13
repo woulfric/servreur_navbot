@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TB4 Cockpit - Navigation</title>
+    
+    <script src="https://code.createjs.com/1.0.0/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0.10.0/build/ros2d.min.js"></script>
+
+    <style>
+        /* --- GLOBAL & LAYOUT --- */
+        body { 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background: #0f0f0f; 
+            color: #eee; 
+            margin: 0; 
+            padding: 0; 
+            height: 100vh; 
+            width: 100vw;
+            overflow: hidden; 
+            display: flex; 
+            user-select: none;
+        }
+
+        /* --- LEFT PANEL (VISUALS) --- */
+        .left-panel {
+            flex: 1; 
+            display: flex;
+            flex-direction: column;
+            border-right: 2px solid #333;
+        }
+
+        /* CAMERA (Top Left) */
+        .camera-container {
+            flex: 1; 
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid #333;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .video-feed { width: 100%; height: 100%; object-fit: contain; } 
+        .cam-overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 4px; font-size: 12px; color: #00ffcc; font-family: monospace; letter-spacing: 1px;}
+        .no-signal { color: #555; font-size: 14px; letter-spacing: 1px; }
+
+        /* MAP (Bottom Left) */
+        .map-container {
+            flex: 1; 
+            background: #1a1a1a;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #ros-map-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- RIGHT PANEL (CONTROLS) --- */
+        .right-panel {
+            width: 350px; 
+            min-width: 300px;
+            background: #181818;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; 
+            box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        }
+
+        h3 { margin: 0 0 20px 0; font-weight: 300; letter-spacing: 3px; text-align: center; color: #fff; border-bottom: 1px solid #333; padding-bottom: 15px; }
+
+        /* TELEMETRY */
+        .dashboard-row { display: flex; gap: 10px; margin-bottom: 25px; }
+        .card { 
+            background: #252525; flex: 1; padding: 10px; 
+            border-radius: 8px; text-align: center; 
+            border-left: 3px solid #3498db; 
+        }
+        .card-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;}
+        .card-val { font-size: 20px; font-weight: bold; font-family: monospace; }
+        .bat-card { border-left-color: #2ecc71; }
+
+        /* SLIDERS */
+        .sliders-box { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #333; }
+        .slider-group { margin-bottom: 15px; }
+        .slider-group:last-child { margin-bottom: 0; }
+        .slider-group label { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; }
+        input[type=range] { width: 100%; accent-color: #3498db; cursor: pointer; }
+
+        /* ARROW KEYS LAYOUT */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 70px); 
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        button { 
+            background: #333; border: 1px solid #444; color: white; 
+            border-radius: 6px; font-size: 24px; cursor: pointer; 
+            transition: all 0.1s; 
+            display: flex; align-items: center; justify-content: center;
+        }
+        button:active { background: #555; transform: scale(0.96); border-color: #777; }
+        
+        .btn-up    { grid-column: 2; grid-row: 1; }
+        .btn-left  { grid-column: 1; grid-row: 2; }
+        .btn-down  { grid-column: 2; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+
+        /* EMERGENCY */
+        .emergency-btn {
+            width: 100%; padding: 20px;
+            background: #c0392b; color: white;
+            border: none; border-radius: 8px;
+            font-size: 18px; font-weight: bold; letter-spacing: 1px;
+            cursor: pointer; text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(192, 57, 43, 0.3);
+            margin-top: auto; 
+            transition: background 0.3s;
+        }
+        .emergency-btn:hover { background: #d94e3e; }
+        .emergency-btn.active { background: #27ae60; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3); }
+
+        .blocked { opacity: 0.3; pointer-events: none; filter: grayscale(100%); }
+        
+        /* Loading overlay pour la map */
+        #map-loading {
+            position: absolute;
+            color: #00ffcc;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="left-panel">
+        <div class="camera-container">
+            <div class="cam-overlay">LIVE FEED ● REC</div>
+            <div class="no-signal">WAITING FOR VIDEO STREAM...</div>
+            <img id="cameraStream" class="video-feed" alt="" style="position: absolute; z-index: 2;" onerror="this.style.display='none'">
+        </div>
+        
+        <div class="map-container" id="mapContainer">
+            <div id="map-loading">INITIALISATION MAP...</div>
+            <div id="ros-map-canvas"></div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div>
+            <h3>TB4 CONTROL</h3>
+            
+            <div class="dashboard-row">
+                <div class="card">
+                    <div class="card-label">Position X / Y</div>
+                    <div class="card-val"><span id="posX">0.0</span> <span style="color:#666">|</span> <span id="posY">0.0</span></div>
+                </div>
+                <div class="card bat-card">
+                    <div class="card-label">Battery</div>
+                    <div class="card-val"><span id="batVal">--</span> <span style="font-size:14px">%</span></div>
+                </div>
+            </div>
+
+            <div class="sliders-box">
+                <div class="slider-group">
+                    <label>Linear Speed <span id="valLin">0.20</span> m/s</label>
+                    <input type="range" id="linearSpeed" min="0.05" max="0.45" step="0.05" value="0.2" oninput="updateLabels()">
+                </div>
+                <div class="slider-group">
+                    <label>Angular Speed <span id="valAng">0.80</span> rad/s</label>
+                    <input type="range" id="angularSpeed" min="0.1" max="1.9" step="0.1" value="0.8" oninput="updateLabels()">
+                </div>
+            </div>
+
+            <div class="controls-grid" id="controlsArea">
+                <button class="btn-up" onmousedown="startMove(1, 0)" onmouseup="stopMove()" onmouseleave="stopMove()">▲</button>
+                <button class="btn-left" onmousedown="startMove(0, 1)" onmouseup="stopMove()" onmouseleave="stopMove()">◀</button>
+                <button class="btn-down" onmousedown="startMove(-1, 0)" onmouseup="stopMove()" onmouseleave="stopMove()">▼</button>
+                <button class="btn-right" onmousedown="startMove(0, -1)" onmouseup="stopMove()" onmouseleave="stopMove()">▶</button>
+            </div>
+        </div>
+
+        <button id="emergencyBtn" class="emergency-btn" onclick="toggleEmergency()">EMERGENCY STOP</button>
+    </div>
+
+    <script>
+        // --- CONFIG ---
+        const ROBOT_IP_CAM = window.location.hostname; 
+        const CAMERA_TOPIC = '/oakd/rgb/preview/image_raw'; 
+        
+        // --- VIDEO ---
+        const videoUrl = `http://${ROBOT_IP_CAM}:8080/stream?topic=${CAMERA_TOPIC}&type=mjpeg&quality=30`;
+        const img = document.getElementById('cameraStream');
+        img.src = videoUrl;
+        img.onerror = function() {
+            setTimeout(() => { img.src = videoUrl; }, 2000);
+        };
+
+        let ros = null;
+        let viewer = null;
+        let gridClient = null;
+        let robotMarker = null;
+
+        // --- DEMARRAGE AUTO : CHARGER LA DERNIERE MAP ---
+        async function initSystem() {
+            try {
+                const confRes = await fetch('/api/config');
+                const config = await confRes.json();
+                
+                let rosUrl = '';
+                if (config.ROSBRIDGE_URL) rosUrl = config.ROSBRIDGE_URL;
+                else if (config.robotIP) rosUrl = `ws://${config.robotIP}:${config.rosPort || '9090'}`;
+                else rosUrl = 'ws://' + window.location.hostname + ':9090';
+
+                document.getElementById('map-loading').innerText = "RECHERCHE MAP...";
+                const mapsRes = await fetch('/api/maps');
+                const mapsData = await mapsRes.json();
+
+                if(mapsData.status === 'success' && mapsData.maps.length > 0) {
+                    const lastMap = mapsData.maps.sort().pop();
+                    
+                    console.log("Chargement de la map :", lastMap);
+                    document.getElementById('map-loading').innerText = "CHARGEMENT: " + lastMap;
+
+                    await fetch('/api/load_map', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ mapName: lastMap })
+                    });
+                } else {
+                    document.getElementById('map-loading').innerText = "AUCUNE MAP TROUVÉE";
+                }
+
+                connectToRos(rosUrl);
+
+            } catch (e) {
+                console.error("Erreur init:", e);
+                document.getElementById('map-loading').innerText = "ERREUR CONNEXION";
+            }
+        }
+
+        function connectToRos(url) {
+            ros = new ROSLIB.Ros({ url: url });
+
+            ros.on('connection', () => {
+                console.log("Connecté à ROS");
+                document.getElementById('map-loading').innerText = "ROS CONNECTÉ - ATTENTE MAP...";
+                setupMapViewer();
+            });
+
+            ros.on('error', () => {
+                document.getElementById('map-loading').innerText = "ERREUR ROSBRIDGE";
+            });
+        }
+
+        function setupMapViewer() {
+            const container = document.getElementById('mapContainer');
+            
+            viewer = new ROS2D.Viewer({
+                divID: 'ros-map-canvas',
+                width: container.offsetWidth,
+                height: container.offsetHeight,
+                background: '#1a1a1a'
+            });
+
+            gridClient = new ROS2D.OccupancyGridClient({
+                ros: ros,
+                rootObject: viewer.scene,
+                continuous: false 
+            });
+
+            gridClient.on('change', () => {
+                document.getElementById('map-loading').style.display = 'none'; 
+                viewer.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
+                viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
+            });
+
+            // --- ROBOT MARKER (Triangle) ---
+            robotMarker = new ROS2D.NavigationArrow({
+                size: 25, strokeSize: 1, fillColor: createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
+            });
+            robotMarker.visible = false;
+            viewer.scene.addChild(robotMarker);
+
+            const odomListener = new ROSLIB.Topic({
+                ros: ros,
+                name: '/odom',
+                messageType: 'nav_msgs/Odometry'
+            });
+
+            odomListener.subscribe((pose) => {
+                robotMarker.x = pose.pose.pose.position.x;
+                robotMarker.y = pose.pose.pose.position.y;
+                
+                const q = pose.pose.pose.orientation;
+                const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+                const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+                const yaw = Math.atan2(siny_cosp, cosy_cosp);
+                
+                robotMarker.rotation = -yaw * (180.0 / Math.PI);
+                robotMarker.visible = true;
+
+                document.getElementById('posX').innerText = pose.pose.pose.position.x.toFixed(2);
+                document.getElementById('posY').innerText = pose.pose.pose.position.y.toFixed(2);
+            });
+            
+            const batListener = new ROSLIB.Topic({
+                ros: ros,
+                name: '/battery_state',
+                messageType: 'sensor_msgs/BatteryState'
+            });
+            batListener.subscribe((bat) => {
+                document.getElementById('batVal').innerText = (bat.percentage * 100).toFixed(0);
+            });
+        }
+
+        initSystem();
+
+
+        let interval = null;
+        let isEmergency = false;
+
+        function updateLabels() {
+            document.getElementById('valLin').innerText = parseFloat(document.getElementById('linearSpeed').value).toFixed(2);
+            document.getElementById('valAng').innerText = parseFloat(document.getElementById('angularSpeed').value).toFixed(2);
+        }
+
+        function updateEmergencyUI() {
+            const btn = document.getElementById('emergencyBtn');
+            const controls = document.getElementById('controlsArea');
+            if (isEmergency) {
+                btn.innerText = "UNLOCK SYSTEM";
+                btn.classList.add('active');
+                controls.classList.add('blocked');
+            } else {
+                btn.innerText = "EMERGENCY STOP";
+                btn.classList.remove('active');
+                controls.classList.remove('blocked');
+            }
+        }
+
+        function toggleEmergency() {
+            isEmergency = !isEmergency;
+            const action = isEmergency ? 'on' : 'off';
+
+            fetch('/api/emergency', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: action })
+            });
+
+            if(isEmergency) stopMove();
+            updateEmergencyUI();
+        }
+
+        function sendCommand(linear, angular) {
+            if (isEmergency) return;
+            fetch('/api/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ linear, angular })
+            }).catch(e => {});
+        }
+
+        function startMove(lin, ang) {
+            if (isEmergency || interval) return;
+            const speedLin = parseFloat(document.getElementById('linearSpeed').value);
+            const speedAng = parseFloat(document.getElementById('angularSpeed').value);
+            const linear = speedLin * lin;
+            const angular = speedAng * ang;
+
+            sendCommand(linear, angular);
+            interval = setInterval(() => sendCommand(linear, angular), 200);
+        }
+
+        function stopMove() {
+            if (interval) { clearInterval(interval); interval = null; }
+            fetch('/api/stop', { method: 'POST' });
+        }
+        
+        updateLabels();
+    </script>
+</body>
+</html>
