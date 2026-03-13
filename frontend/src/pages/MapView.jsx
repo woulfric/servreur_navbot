@@ -2,14 +2,13 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
-import './telecommande.css'; 
+import './mapView.css'; 
 
 export default function MapView() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
   
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
-  // Nouveaux states pour la télémétrie
   const [posX, setPosX] = useState('0.00');
   const [posY, setPosY] = useState('0.00');
   const [battery, setBattery] = useState('--.-');
@@ -231,8 +230,8 @@ export default function MapView() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="teleop-page">
+    <DashboardLayout contentClassName="layout-content--split">
+      <div className="teleop-page mapview-page">
         
         <div className="teleop-col-left">
           <Card title={`SLAM Visualizer - Status : ${mapInfo}`}>
@@ -246,23 +245,22 @@ export default function MapView() {
 
         <div className="teleop-col-right">
           
-          {/* Nouveaux contrôles du Bridge */}
           <Card title="Bridge Controls">
             {!selectedRobotId && (
-              <div style={{ padding: '10px', background: '#f39c12', color: 'white', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
+              <div style={{ padding: '6px', background: '#FF9800', color: '#FCFDFF', marginBottom: '6px', borderRadius: '5px', textAlign: 'center', fontSize: '12px' }}>
                 Veuillez sélectionner un robot
               </div>
             )}
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button 
-                style={{ flex: 1, padding: '15px', background: '#8e44ad', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                style={{ flex: 1, padding: '8px', background: '#546FA8', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }} 
                 onClick={() => toggleBridge('start')}
                 disabled={!isRobotOnline}
               >
                 START BRIDGE
               </button>
               <button 
-                style={{ flex: 1, padding: '15px', background: '#2c3e50', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+                style={{ flex: 1, padding: '8px', background: '#24386E', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }} 
                 onClick={() => toggleBridge('stop')}
                 disabled={!isRobotOnline}
               >
@@ -299,19 +297,18 @@ export default function MapView() {
             </button>
           </Card>
 
-          {/* Nouvelle carte Télémétrie */}
           <Card title="Telemetry">
             <div className="telemetry-grid">
               <div>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Position X</div>
+                <div style={{ fontSize: '12px', color: '#888888', textAlign: 'center' }}>Position X</div>
                 <div className="telemetry-val">{posX}m</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Position Y</div>
+                <div style={{ fontSize: '12px', color: '#888888', textAlign: 'center' }}>Position Y</div>
                 <div className="telemetry-val">{posY}m</div>
               </div>
-              <div style={{ gridColumn: 'span 2', marginTop: '10px' }}>
-                <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '5px' }}>Batterie</div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ fontSize: '12px', color: '#888888', textAlign: 'center' }}>Batterie</div>
                 <div className="telemetry-val battery-val">{battery} V</div>
               </div>
             </div>
@@ -335,7 +332,7 @@ export default function MapView() {
           <Card title="System Connection">
             <ul className="teleop-list">
               <li>
-                <span>Robot Cible</span>
+                <span>Robot Target</span>
                 <strong>{selectedRobotId || "Aucun"}</strong>
               </li>
               <li>

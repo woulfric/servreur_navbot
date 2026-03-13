@@ -4,7 +4,7 @@ import TopBar from "./Topbar";
 import NotificationsPanel from './NotificationsPanel';
 import './dashboardLayout.css';
 
-export default function DashboardLayout({ children }) {
+export default function DashboardLayout({ children, contentClassName = '' }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }) {
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           onNotificationsClick={() => setNotificationsOpen(!notificationsOpen)}
         />
-        <div className="layout-content">{children}</div>
+        <div className={`layout-content ${contentClassName}`.trim()}>{children}</div>
       </div>
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <NotificationsPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} />

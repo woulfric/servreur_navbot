@@ -155,7 +155,7 @@ export default function Telecommande() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout contentClassName="layout-content--split">
       <div className="teleop-page">
         
         <div className="teleop-col-left">
@@ -191,7 +191,7 @@ export default function Telecommande() {
 
           <Card title="Manual Control">
             {!selectedRobotId && (
-              <div style={{ padding: '10px', background: '#f39c12', color: 'white', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
+              <div style={{ padding: '10px', background: '#FF9800', color: '#FCFDFF', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
                 Veuillez sélectionner un robot
               </div>
             )}

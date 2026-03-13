@@ -116,27 +116,27 @@
 }
 
 .notification-item.notification-warning {
-  border-left-color: #eab308;
+  border-left-color: var(--color-warning);
 }
 
 .notification-item.notification-warning .notification-icon {
-  color: #eab308;
+  color: var(--color-warning);
 }
 
 .notification-item.notification-error {
-  border-left-color: #ef4444;
+  border-left-color: var(--color-error);
 }
 
 .notification-item.notification-error .notification-icon {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .notification-item.notification-info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--color-info);
 }
 
 .notification-item.notification-info .notification-icon {
-  color: #3b82f6;
+  color: var(--color-info);
 }
 
 .notification-icon {
@@ -147,7 +147,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(84, 111, 168, 0.12);
 }
 
 .notification-content {

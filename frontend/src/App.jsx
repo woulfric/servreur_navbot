@@ -17,7 +17,8 @@ import Telecommande from './pages/Telecommande';
 import MapView from './pages/MapView';
 
 export default function App() {
-  const isAuthenticated = true; // remplacer par useAuthStore((state) => state.isAuthenticated);
+  // const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+  const isAuthenticated = true;
 
   return (
     <RobotProvider>

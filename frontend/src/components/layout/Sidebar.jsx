@@ -3,8 +3,10 @@ import {
   LayoutDashboard, Bot, Map, Flag, MapPin,
   AlertTriangle, History, Settings, Gamepad2, PlayCircle
 } from 'lucide-react';
+import { useTheme } from '../../ThemeContext';
 import './sidebar.css';
-import logo from './Logo_mod_1.png';
+import logoLight from './Logo_mod_1.png';
+import logoDark from './Logo_mod_2.webp';
 
 const menu = [
   { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={18} /> },
@@ -20,6 +22,9 @@ const menu = [
 ];
 
 export default function Sidebar({ isOpen = false, onClose = () => {} }) {
+  const { isDarkMode } = useTheme();
+  const logoSrc = isDarkMode ? logoLight : logoDark;
+
   return (
     <aside 
       className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}
@@ -27,7 +32,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
       aria-label="Navigation principale"
     >
     <div className="logo-container">
-      <img src={logo} alt="NavBot Logo" className="topbar-logo" />
+      <img src={logoSrc} alt="NavBot Logo" className="topbar-logo" />
       <span className="logo-text">NavBot</span>
     </div>
       

@@ -58,9 +58,14 @@
 /* hover + active */
 .sidebar a:hover li,
 .sidebar a.active li {
-  background: rgba(34, 197, 94, 0.1);
+  background: var(--bg-hover);
   opacity: 1;
   color: var(--accent-primary);
+}
+
+:root[data-theme="dark"] .sidebar a:hover li,
+:root[data-theme="dark"] .sidebar a.active li {
+  background: rgba(212, 235, 255, 0.15);
 }
 
 /* Tablet (481px - 768px) */

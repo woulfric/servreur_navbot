@@ -468,7 +468,6 @@ const handleLaunchMission = async (mission) => {
                       <RotateCcw size={16} />
                     </button>
                   )}
-
                   <button
                     className="action-icon-btn delete"
                     onClick={(e) => {
@@ -561,7 +560,6 @@ const handleLaunchMission = async (mission) => {
                   ></div>
                 </div>
               </div>
-
               <div className="detail-row">
                 <span></span>
                 <strong>{selectedMission.coverage}</strong>

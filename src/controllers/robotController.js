@@ -29,7 +29,6 @@ const getTelemetry = (req, res) => {
 const moveRobot = (req, res) => {
   const { robotId, linear, angular } = req.body;
   if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
-
   mqttService.publishVelocityCommand(robotId, linear, angular);
   res.json({ status: 'success', message: 'Commande publiee' });
 };
@@ -45,14 +44,12 @@ const stopRobot = (req, res) => {
 const toggleEmergency = (req, res) => {
   const { robotId, state } = req.body;
   if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
-
   if (state === 'on') {
     mqttService.publishVelocityCommand(robotId, 0.0, 0.0);
     mqttService.publishSystemCommand(robotId, 'emergency_stop');
   } else {
     mqttService.publishSystemCommand(robotId, 'emergency_release');
   }
-
   res.json({ status: 'success', state });
 };
 
@@ -120,7 +117,6 @@ const startSlam = (req, res) => {
 const resetSlam = (req, res) => {
   const { robotId } = req.body;
   if (!robotId) return res.status(400).json({ error: 'robotId manquant' });
-
   mqttService.publishSystemCommand(robotId, 'reset_slam');
   res.json({ status: 'success', message: 'Reset publie' });
 };

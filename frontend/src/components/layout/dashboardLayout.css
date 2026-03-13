@@ -7,8 +7,10 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   max-height: 100vh;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .layout-content {
@@ -16,6 +18,22 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.layout-content.layout-content--split {
+  display: block;
+  grid-template-columns: none;
+  gap: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .layout-content.layout-content--split {
+    overflow: auto;
+  }
 }
 
 .sidebar-overlay {
