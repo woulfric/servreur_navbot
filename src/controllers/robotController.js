@@ -1,6 +1,7 @@
 const mqttService = require('../services/mqttService');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const mapsDir = path.join(__dirname, '../../public/maps');
 const poiMapsDir = path.join(__dirname, '../../public/POIMaps');
@@ -264,22 +265,53 @@ const startMission = (req, res) => {
     ensurePoiMapsDir();
 
     const safePlanName = sanitizeFileName(planName);
-    const filePath = path.join(poiMapsDir, `${safePlanName}.json`);
+    const poiPlanPath = path.join(poiMapsDir, `${safePlanName}.json`);
 
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(poiPlanPath)) {
       return res.status(404).json({ error: 'Plan POI introuvable' });
     }
 
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
+    const rawPlan = fs.readFileSync(poiPlanPath, 'utf-8');
+    const parsedPlan = JSON.parse(rawPlan);
+
+    const mapName = parsedPlan.mapName;
+
+    if (!mapName) {
+      return res.status(400).json({ error: 'mapName introuvable dans le plan POI' });
+    }
+
+    const safeMapName = sanitizeFileName(mapName);
+    const pgmPath = path.join(mapsDir, `${safeMapName}.pgm`);
+    const yamlPath = path.join(mapsDir, `${safeMapName}.yaml`);
+
+    if (!fs.existsSync(pgmPath) || !fs.existsSync(yamlPath)) {
+      return res.status(404).json({
+        error: 'Fichiers de map introuvables',
+        details: {
+          pgmExists: fs.existsSync(pgmPath),
+          yamlExists: fs.existsSync(yamlPath),
+          mapName: safeMapName,
+        },
+      });
+    }
+
+    const pgmBuffer = fs.readFileSync(pgmPath);
+    const yamlBuffer = fs.readFileSync(yamlPath);
+
+    const pgmCompressed = zlib.deflateSync(pgmBuffer).toString('base64');
+    const yamlCompressed = zlib.deflateSync(yamlBuffer).toString('base64');
 
     const missionPayload = {
       missionId: missionId || `mission_${Date.now()}`,
       robotId,
       planName: safePlanName,
-      mapName: parsed.mapName,
-      metadata: parsed.metadata || null,
-      pois: Array.isArray(parsed.pois) ? parsed.pois : [],
+      map: {
+        name: safeMapName,
+        pgm: pgmCompressed,
+        yaml: yamlCompressed,
+      },
+      metadata: parsedPlan.metadata || null,
+      pois: Array.isArray(parsedPlan.pois) ? parsedPlan.pois : [],
       createdAt: new Date().toISOString(),
     };
 
@@ -288,7 +320,13 @@ const startMission = (req, res) => {
     res.json({
       status: 'success',
       message: 'Mission publiée au robot',
-      mission: missionPayload,
+      missionPreview: {
+        missionId: missionPayload.missionId,
+        robotId: missionPayload.robotId,
+        planName: missionPayload.planName,
+        mapName: missionPayload.map.name,
+        poisCount: missionPayload.pois.length,
+      },
     });
   } catch (error) {
     console.error('Erreur lancement mission:', error);

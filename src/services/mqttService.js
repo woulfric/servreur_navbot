@@ -3,7 +3,14 @@ const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 
-const client = mqtt.connect('mqtt://localhost:1883');
+// conention au broker MQTT local sur le port 1883
+// const client = mqtt.connect('mqtt://localhost:1883');
+
+const client = mqtt.connect('mqtt://138.68.110.228:1883', {
+  username: 'navbot',
+  password: 'turtlebot'
+});
+
 const activeRobots = new Map();
 
 client.on('connect', () => {

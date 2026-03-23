@@ -10,25 +10,97 @@ import base64
 import paho.mqtt.client as mqtt
 from geometry_msgs.msg import Twist
 
-MQTT_BROKER = "172.20.10.4"
+MQTT_BROKER = "138.68.110.228"
 MQTT_PORT = 1883
+MQTT_USERNAME = "navbot"
+MQTT_PASSWORD = "turtlebot"
+
 ROBOT_ID = "tb3_01"
 
 cmd_pub = None
 mqtt_client_ref = None
 
+
+def ensure_dir(directory_path):
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+
+
+def save_runtime_map(map_payload, mission_id):
+    if not isinstance(map_payload, dict):
+        raise Exception("Le champ 'map' est invalide ou absent")
+
+    map_name = map_payload.get("name")
+    pgm_b64 = map_payload.get("pgm")
+    yaml_b64 = map_payload.get("yaml")
+
+    if not map_name:
+        raise Exception("Le nom de la map est manquant dans la mission")
+
+    if not pgm_b64 or not yaml_b64:
+        raise Exception("Les donnees PGM/YAML sont manquantes dans la mission")
+
+    safe_map_name = re.sub(r'[^a-zA-Z0-9_-]', '_', map_name)
+    safe_mission_id = re.sub(r'[^a-zA-Z0-9_-]', '_', mission_id if mission_id else "mission_runtime")
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    runtime_dir = os.path.join(script_dir, "maps_runtime", safe_mission_id)
+
+    ensure_dir(runtime_dir)
+
+    pgm_path = os.path.join(runtime_dir, safe_map_name + ".pgm")
+    yaml_path = os.path.join(runtime_dir, safe_map_name + ".yaml")
+
+    try:
+        pgm_data = zlib.decompress(base64.b64decode(pgm_b64))
+        yaml_data = zlib.decompress(base64.b64decode(yaml_b64))
+    except Exception as e:
+        raise Exception("Echec decompression map mission : " + str(e))
+
+    with open(pgm_path, "wb") as f:
+        f.write(pgm_data)
+
+    with open(yaml_path, "wb") as f:
+        f.write(yaml_data)
+
+    rospy.loginfo("Map mission ecrite localement : " + pgm_path)
+    rospy.loginfo("YAML mission ecrit localement : " + yaml_path)
+
+    return {
+        "map_name": safe_map_name,
+        "runtime_dir": runtime_dir,
+        "pgm_path": pgm_path,
+        "yaml_path": yaml_path
+    }
+
+
 def on_connect(client, userdata, flags, rc):
-    rospy.loginfo("Connecte au broker MQTT avec le code " + str(rc))
+    if rc == 0:
+        rospy.loginfo("Connecte au broker MQTT")
+    else:
+        rospy.logwarn("Connexion MQTT avec code " + str(rc))
+        return
 
     status_topic = "navbot/" + ROBOT_ID + "/status"
     client.publish(status_topic, json.dumps({"state": "online"}), qos=1, retain=True)
 
-    client.subscribe("navbot/" + ROBOT_ID + "/cmd_vel")
-    client.subscribe("navbot/" + ROBOT_ID + "/sys_cmd")
-    client.subscribe("navbot/" + ROBOT_ID + "/mission")
+    client.subscribe("navbot/" + ROBOT_ID + "/cmd_vel", qos=1)
+    client.subscribe("navbot/" + ROBOT_ID + "/sys_cmd", qos=1)
+    client.subscribe("navbot/" + ROBOT_ID + "/mission", qos=1)
+
+    rospy.loginfo("Souscription aux topics du robot " + ROBOT_ID)
+
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        rospy.logwarn("Deconnecte du broker MQTT de maniere inattendue. Code: " + str(rc))
+    else:
+        rospy.loginfo("Deconnexion propre du broker MQTT")
+
 
 def on_message(client, userdata, msg):
     global cmd_pub
+
     try:
         payload = json.loads(msg.payload.decode('utf-8'))
         topic = msg.topic
@@ -38,12 +110,21 @@ def on_message(client, userdata, msg):
             twist.linear.x = float(payload.get('linear', 0.0))
             twist.angular.z = float(payload.get('angular', 0.0))
             cmd_pub.publish(twist)
+            rospy.loginfo("cmd_vel recu | linear=%.3f angular=%.3f" % (twist.linear.x, twist.angular.z))
 
         elif topic == "navbot/" + ROBOT_ID + "/mission":
+            mission_id = str(payload.get("missionId", "mission_runtime"))
+            plan_name = str(payload.get("planName", "unknown_plan"))
+
             rospy.loginfo("Mission recue pour le robot " + ROBOT_ID)
-            rospy.loginfo("Mission ID : " + str(payload.get("missionId")))
-            rospy.loginfo("Plan : " + str(payload.get("planName")))
-            rospy.loginfo("Carte : " + str(payload.get("mapName")))
+            rospy.loginfo("Mission ID : " + mission_id)
+            rospy.loginfo("Plan : " + plan_name)
+
+            map_payload = payload.get("map", {})
+            map_name = map_payload.get("name", "map_inconnue")
+            rospy.loginfo("Carte : " + map_name)
+
+            runtime_map_info = save_runtime_map(map_payload, mission_id)
 
             pois = payload.get("pois", [])
             rospy.loginfo("Nombre de POI : " + str(len(pois)))
@@ -58,6 +139,9 @@ def on_message(client, userdata, msg):
                         str(poi.get("type"))
                     )
                 )
+
+            rospy.loginfo("Mission preparee localement.")
+            rospy.loginfo("Map disponible dans : " + runtime_map_info["runtime_dir"])
 
         elif topic == "navbot/" + ROBOT_ID + "/sys_cmd":
             action = payload.get('action')
@@ -136,11 +220,13 @@ def on_message(client, userdata, msg):
 
                     client.publish(upload_topic, upload_payload, qos=1)
                     rospy.loginfo("Carte compressee et envoyee au serveur via MQTT.")
+
                 except Exception as e_file:
                     rospy.logerr("Erreur lors de la compression/envoi de la carte : " + str(e_file))
 
     except Exception as e:
         rospy.logerr("Erreur traitement message: " + str(e))
+
 
 def main():
     global cmd_pub, mqtt_client_ref
@@ -148,26 +234,39 @@ def main():
     rospy.init_node('mqtt_ros_bridge', anonymous=True)
     cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=ROBOT_ID)
     mqtt_client_ref = client
+
+    client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
     client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
+
+    client.reconnect_delay_set(min_delay=2, max_delay=10)
 
     status_topic = "navbot/" + ROBOT_ID + "/status"
     lwt_payload = json.dumps({"state": "offline"})
     client.will_set(status_topic, lwt_payload, qos=1, retain=True)
 
-    rospy.loginfo("Tentative connexion broker " + MQTT_BROKER)
+    rospy.loginfo("Tentative connexion broker " + MQTT_BROKER + ":" + str(MQTT_PORT))
+
     try:
         client.connect(MQTT_BROKER, MQTT_PORT, 60)
         client.loop_start()
         rospy.spin()
+
     except Exception as e:
         rospy.logerr("Erreur critique: " + str(e))
+
     finally:
-        client.publish(status_topic, lwt_payload, qos=1, retain=True)
-        client.disconnect()
-        client.loop_stop()
+        try:
+            client.publish(status_topic, lwt_payload, qos=1, retain=True)
+            client.disconnect()
+            client.loop_stop()
+        except Exception:
+            pass
+
 
 if __name__ == '__main__':
     main()
