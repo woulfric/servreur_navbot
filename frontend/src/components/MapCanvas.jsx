@@ -95,7 +95,7 @@ export default function MapCanvas({ mapName }) {
     <div
       style={{
         width: '100%',
-        height: '500px',
+        height: '100%',
         background: '#0b0f18',
         display: 'flex',
         justifyContent: 'center',

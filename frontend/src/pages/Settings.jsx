@@ -3,6 +3,7 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import Card from '../components/common/Card';
 import { Bell, Lock } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
+import { useI18n } from '../i18n/LanguageContext';
 import './settings.css';
 
 const SETTINGS_STORAGE_KEY = 'navbot_settings';
@@ -21,7 +22,12 @@ const DEFAULT_SETTINGS = {
 
 export default function Settings() {
   const { isDarkMode, setThemeMode } = useTheme();
+  const { t, language, setLanguage } = useI18n();
   const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS, darkMode: isDarkMode });
+
+  useEffect(() => {
+    setSettings((prev) => ({ ...prev, language }));
+  }, [language]);
 
   useEffect(() => {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -73,6 +79,10 @@ export default function Settings() {
       applyThemeVariant(value);
     }
 
+    if (key === 'language') {
+      setLanguage(value);
+    }
+
     setSettings((prev) => ({
       ...prev,
       [key]: value,
@@ -82,11 +92,12 @@ export default function Settings() {
   const handleSave = () => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     console.log('Settings saved:', settings);
-    alert('Paramètres sauvegardés avec succès!');
+    alert(t('settings.saved'));
   };
 
   const handleReset = () => {
     setThemeMode(false);
+    setLanguage('fr');
     applyThemeVariant(DEFAULT_SETTINGS.theme);
     setSettings({ ...DEFAULT_SETTINGS, darkMode: false });
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
@@ -95,14 +106,14 @@ export default function Settings() {
   return (
     <DashboardLayout contentClassName="settings-layout">
       <div className="settings-container">
-        <h1>Paramètres</h1>
+        <h1>{t('settings.title')}</h1>
         <div className="settings-grid">
-          <Card title="🎨 Préférences Visuelles">
+          <Card title={`🎨 ${t('settings.visual')}`}>
             <div className="settings-group">
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Mode Sombre</span>
-                  <span className="setting-description">Utiliser le thème sombre</span>
+                  <span>{t('settings.darkMode')}</span>
+                  <span className="setting-description">{t('settings.darkModeDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -116,46 +127,44 @@ export default function Settings() {
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Thème de Couleur</span>
-                  <span className="setting-description">Sélectionnez votre thème favori</span>
+                  <span>{t('settings.colorTheme')}</span>
+                  <span className="setting-description">{t('settings.colorThemeDesc')}</span>
                 </div>
                 <select
                   value={settings.theme}
                   onChange={(e) => handleSelectChange('theme', e.target.value)}
                   className="settings-select"
                 >
-                  <option value="blue">Bleu</option>
-                  <option value="green">Vert</option>
-                  <option value="purple">Violet</option>
-                  <option value="orange">Orange</option>
+                  <option value="blue">{t('settings.blue')}</option>
+                  <option value="green">{t('settings.green')}</option>
+                  <option value="purple">{t('settings.purple')}</option>
+                  <option value="orange">{t('settings.orange')}</option>
                 </select>
               </div>
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Langue</span>
-                  <span className="setting-description">Choisir votre langue préférée</span>
+                  <span>{t('settings.language')}</span>
+                  <span className="setting-description">{t('settings.languageDesc')}</span>
                 </div>
                 <select
                   value={settings.language}
                   onChange={(e) => handleSelectChange('language', e.target.value)}
                   className="settings-select"
                 >
-                  <option value="fr">Français</option>
-                  <option value="en">Anglais</option>
-                  <option value="es">Espagnol</option>
-                  <option value="de">Allemand</option>
+                  <option value="fr">{t('settings.french')}</option>
+                  <option value="en">{t('settings.english')}</option>
                 </select>
               </div>
             </div>
           </Card>
 
-          <Card title={<><Bell size={18} /> Notifications et Alertes</>}>
+          <Card title={<><Bell size={18} /> {t('settings.notifications')}</>}>
             <div className="settings-group">
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Notifications Activées</span>
-                  <span className="setting-description">Recevoir les notifications du système</span>
+                  <span>{t('settings.notificationsEnabled')}</span>
+                  <span className="setting-description">{t('settings.notificationsEnabledDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -169,8 +178,8 @@ export default function Settings() {
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Alertes par Email</span>
-                  <span className="setting-description">Recevoir les alertes par email</span>
+                  <span>{t('settings.emailAlerts')}</span>
+                  <span className="setting-description">{t('settings.emailAlertsDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -184,8 +193,8 @@ export default function Settings() {
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Alertes Sonores</span>
-                  <span className="setting-description">Activer les sons d'alerte</span>
+                  <span>{t('settings.soundAlerts')}</span>
+                  <span className="setting-description">{t('settings.soundAlertsDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -199,12 +208,12 @@ export default function Settings() {
             </div>
           </Card>
 
-          <Card title={<><Lock size={18} /> Données et Confidentialité</>}>
+          <Card title={<><Lock size={18} /> {t('settings.privacy')}</>}>
             <div className="settings-group">
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Sauvegarde Automatique</span>
-                  <span className="setting-description">Sauvegarder automatiquement vos données</span>
+                  <span>{t('settings.autoSave')}</span>
+                  <span className="setting-description">{t('settings.autoSaveDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -218,8 +227,8 @@ export default function Settings() {
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Authentification Deux Facteurs</span>
-                  <span className="setting-description">Sécuriser votre compte</span>
+                  <span>{t('settings.twoFactor')}</span>
+                  <span className="setting-description">{t('settings.twoFactorDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -233,8 +242,8 @@ export default function Settings() {
 
               <div className="setting-item">
                 <div className="setting-label">
-                  <span>Collecte de Données Anonymes</span>
-                  <span className="setting-description">Nous aider à améliorer l'application</span>
+                  <span>{t('settings.dataCollection')}</span>
+                  <span className="setting-description">{t('settings.dataCollectionDesc')}</span>
                 </div>
                 <label className="toggle-switch">
                   <input
@@ -252,10 +261,10 @@ export default function Settings() {
         {/* Boutons d'Action */}
         <div className="settings-actions">
           <button className="btn-reset" onClick={handleReset}>
-            Réinitialiser
+            {t('settings.reset')}
           </button>
           <button className="btn-save" onClick={handleSave}>
-            Enregistrer les Paramètres
+            {t('settings.save')}
           </button>
         </div>
       </div>

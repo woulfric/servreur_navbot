@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
+import { useI18n } from '../i18n/LanguageContext';
 import './mapView.css'; 
 
 export default function MapView() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
+  const { t, language } = useI18n();
   
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
@@ -111,7 +113,7 @@ export default function MapView() {
   };
 
   const toggleSlam = (action) => {
-    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    if (!selectedRobotId) return alert(t('common.selectRobot'));
     
     setMapInfo(action === 'start' ? 'STARTING SLAM...' : 'STOPPING SLAM...');
     const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
@@ -153,7 +155,7 @@ export default function MapView() {
 
   // Nouvelle fonction pour contrôler le Bridge
   const toggleBridge = (action) => {
-    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    if (!selectedRobotId) return alert(t('common.selectRobot'));
     
     setMapInfo(action === 'start' ? 'STARTING ROSBRIDGE...' : 'STOPPING ROSBRIDGE...');
     fetch(`/api/${action}_bridge`, { 
@@ -173,7 +175,7 @@ export default function MapView() {
   };
 
   const saveMap = () => {
-    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    if (!selectedRobotId) return alert(t('common.selectRobot'));
 
     const mapName = window.prompt("Entrez un nom pour cette carte (ex: zone_a) :");
     if (!mapName || mapName.trim() === "") return;
@@ -248,7 +250,7 @@ export default function MapView() {
           <Card title="Bridge Controls">
             {!selectedRobotId && (
               <div style={{ padding: '6px', background: '#FF9800', color: '#FCFDFF', marginBottom: '6px', borderRadius: '5px', textAlign: 'center', fontSize: '12px' }}>
-                Veuillez sélectionner un robot
+                {t('common.selectRobot')}
               </div>
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -316,7 +318,7 @@ export default function MapView() {
 
           <Card title="Robot Override">
             <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '15px' }}>
-              Utilisez les flèches pour déplacer le robot et scanner la zone.
+              {language === 'en' ? 'Use arrows to move the robot and scan the area.' : 'Utilisez les fleches pour deplacer le robot et scanner la zone.'}
             </p>
             <div className={`teleop-pad ${!isRobotOnline ? 'blocked' : ''}`} style={{ margin: 0 }}>
               <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
@@ -333,7 +335,7 @@ export default function MapView() {
             <ul className="teleop-list">
               <li>
                 <span>Robot Target</span>
-                <strong>{selectedRobotId || "Aucun"}</strong>
+                <strong>{selectedRobotId || t('common.none')}</strong>
               </li>
               <li>
                 <span>Broker MQTT</span>

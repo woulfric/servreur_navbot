@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
+import { useI18n } from '../i18n/LanguageContext';
 import './telecommande.css';
 
 export default function Telecommande() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
+  const { t } = useI18n();
 
   const [battery, setBattery] = useState('--');
   const [posX, setPosX] = useState('0.00');
@@ -142,7 +144,7 @@ export default function Telecommande() {
   };
 
   const toggleEmergency = () => {
-    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    if (!selectedRobotId) return alert(t('common.selectRobot'));
 
     const newState = !isEmergency;
     setIsEmergency(newState);
@@ -192,7 +194,7 @@ export default function Telecommande() {
           <Card title="Manual Control">
             {!selectedRobotId && (
               <div style={{ padding: '10px', background: '#FF9800', color: '#FCFDFF', marginBottom: '15px', borderRadius: '5px', textAlign: 'center' }}>
-                Veuillez sélectionner un robot
+                {t('common.selectRobot')}
               </div>
             )}
             <div className={isEmergency || !isRobotOnline ? 'blocked' : ''}>
@@ -232,7 +234,7 @@ export default function Telecommande() {
             <ul className="teleop-list">
               <li>
                 <span>Robot Cible</span>
-                <strong>{selectedRobotId || "Aucun"}</strong>
+                <strong>{selectedRobotId || t('common.none')}</strong>
               </li>
               <li>
                 <span>Broker MQTT</span>
