@@ -2,9 +2,11 @@ import DashboardLayout from '../components/layout/DashboardLayout.jsx';
 import Card from '../components/common/Card.jsx';
 import { useState } from 'react';
 import { Bot, Target, MapPin, Globe, CircleCheck, Play, Clock } from 'lucide-react';
+import { useI18n } from '../i18n/LanguageContext';
 import './dashboard.css';
 
 export default function Dashboard() {
+  const { language } = useI18n();
   const [robots] = useState([
     { id: 1, name: 'NavBot-01', status: 'Online', battery: 87, mode: 'AUTONOMOUS', temp: 45, location: '32.578 / 15.672' },
     { id: 2, name: 'NavBot-02', status: 'Offline', battery: 0, mode: 'IDLE', temp: 32, location: 'Unknown' },
@@ -52,41 +54,41 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       {/* Statistiques principales */}
-      <Card title="Aperçu du Système" span={2}>
+      <Card title={language === 'en' ? 'System Overview' : 'Apercu du Systeme'} span={2}>
         <div className="dashboard-stats">
           <div className="stat-box stat-total">
             <div className="stat-icon"><Bot size={24} /></div>
             <div className="stat-content">
               <div className="stat-value">{stats.totalRobots}</div>
-              <div className="stat-label">Robots Total</div>
+              <div className="stat-label">{language === 'en' ? 'Total Robots' : 'Robots Total'}</div>
             </div>
           </div>
           <div className="stat-box stat-online">
             <div className="stat-icon"><CircleCheck size={24} /></div>
             <div className="stat-content">
               <div className="stat-value">{stats.onlineRobots}</div>
-              <div className="stat-label">En ligne</div>
+              <div className="stat-label">{language === 'en' ? 'Online' : 'En ligne'}</div>
             </div>
           </div>
           <div className="stat-box stat-missions">
             <div className="stat-icon"><Target size={24} /></div>
             <div className="stat-content">
               <div className="stat-value">{stats.runningMissions}</div>
-              <div className="stat-label">Missions actives</div>
+              <div className="stat-label">{language === 'en' ? 'Active missions' : 'Missions actives'}</div>
             </div>
           </div>
           <div className="stat-box stat-success">
             <div className="stat-icon"><CircleCheck size={24} /></div>
             <div className="stat-content">
               <div className="stat-value">{stats.successRate}%</div>
-              <div className="stat-label">Taux de succès</div>
+              <div className="stat-label">{language === 'en' ? 'Success rate' : 'Taux de succes'}</div>
             </div>
           </div>
         </div>
       </Card>
 
       {/* État des robots */}
-      <Card title="État des Robots" span={2}>
+      <Card title={language === 'en' ? 'Robot Status' : 'Etat des Robots'} span={2}>
         <div className="robots-status-grid">
           {robots.map(robot => (
             <div key={robot.id} className="robot-status-card">
@@ -98,7 +100,7 @@ export default function Dashboard() {
               </div>
 
               <div className="robot-stat">
-                <span className="stat-label">Batterie</span>
+                <span className="stat-label">{language === 'en' ? 'Battery' : 'Batterie'}</span>
                 <div className="stat-value-bar">
                   <div className={`bar-fill ${getBatteryColor(robot.battery)}`} style={{ width: `${robot.battery}%` }}></div>
                 </div>
@@ -106,17 +108,17 @@ export default function Dashboard() {
               </div>
 
               <div className="robot-stat">
-                <span className="stat-label">Température</span>
+                <span className="stat-label">{language === 'en' ? 'Temperature' : 'Temperature'}</span>
                 <span className="stat-text">{robot.temp}°C</span>
               </div>
 
               <div className="robot-stat">
-                <span className="stat-label">Mode</span>
+                <span className="stat-label">{language === 'en' ? 'Mode' : 'Mode'}</span>
                 <span className="stat-text">{robot.mode}</span>
               </div>
 
               <div className="robot-stat">
-                <span className="stat-label">Position</span>
+                <span className="stat-label">{language === 'en' ? 'Position' : 'Position'}</span>
                 <span className="stat-text">{robot.location}</span>
               </div>
             </div>
@@ -125,7 +127,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Missions en cours */}
-      <Card title="Missions Actives" span={1}>
+      <Card title={language === 'en' ? 'Active Missions' : 'Missions Actives'} span={1}>
         <div className="missions-panel">
           {missions.length > 0 ? (
             missions.map(mission => (
@@ -147,13 +149,13 @@ export default function Dashboard() {
               </div>
             ))
           ) : (
-            <p className="empty-message">Aucune mission</p>
+            <p className="empty-message">{language === 'en' ? 'No mission' : 'Aucune mission'}</p>
           )}
         </div>
       </Card>
 
       {/* Alertes récentes */}
-      <Card title="Alertes Récentes" span={1}>
+      <Card title={language === 'en' ? 'Recent Alerts' : 'Alertes Recentes'} span={1}>
         <div className="alerts-panel">
           {recentAlerts.length > 0 ? (
             recentAlerts.map(alert => (
@@ -161,18 +163,18 @@ export default function Dashboard() {
                 <div className="alert-marker"></div>
                 <div className="alert-content">
                   <p className="alert-message">{alert.message}</p>
-                  <span className="alert-time">{alert.time} ago</span>
+                  <span className="alert-time">{language === 'en' ? `${alert.time} ago` : `il y a ${alert.time}`}</span>
                 </div>
               </div>
             ))
           ) : (
-            <p className="empty-message">Aucune alerte</p>
+            <p className="empty-message">{language === 'en' ? 'No alert' : 'Aucune alerte'}</p>
           )}
         </div>
       </Card>
 
       {/* Aperçu de la carte */}
-      <Card title="Dernière Carte" span={1}>
+      <Card title={language === 'en' ? 'Latest Map' : 'Derniere Carte'} span={1}>
         <div className="map-preview">
           <svg viewBox="0 0 400 300" className="preview-svg">
             <rect width="400" height="300" fill="#1a2332" />
@@ -188,22 +190,22 @@ export default function Dashboard() {
             <polygon points="200,135 195,150 200,145 205,150" fill="#22c55e" />
           </svg>
           <div className="map-info">
-            <span><MapPin size={16} /> Étage 1</span>
+            <span><MapPin size={16} /> {language === 'en' ? 'Floor 1' : 'Etage 1'}</span>
             <span><Target size={16} /> 3 POI</span>
           </div>
         </div>
       </Card>
 
       {/* Système */}
-      <Card title="Système" span={1}>
+      <Card title={language === 'en' ? 'System' : 'Systeme'} span={1}>
         <div className="system-panel">
           <div className="system-item">
             <span>Status</span>
-            <span className="system-value online"><CircleCheck size={16} /> Opérationnel</span>
+            <span className="system-value online"><CircleCheck size={16} /> {language === 'en' ? 'Operational' : 'Operationnel'}</span>
           </div>
           <div className="system-item">
-            <span>Connexion</span>
-            <span className="system-value"><Globe size={16} /> Connecté</span>
+            <span>{language === 'en' ? 'Connection' : 'Connexion'}</span>
+            <span className="system-value"><Globe size={16} /> {language === 'en' ? 'Connected' : 'Connecte'}</span>
           </div>
           <div className="system-item">
             <span>Version</span>
@@ -211,7 +213,7 @@ export default function Dashboard() {
           </div>
           <div className="system-item">
             <span>Uptime</span>
-            <span className="system-value">7 jours</span>
+            <span className="system-value">{language === 'en' ? '7 days' : '7 jours'}</span>
           </div>
         </div>
       </Card>

@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
-import './mapView.css';
+import { useI18n } from '../i18n/LanguageContext';
+import './mapView.css'; 
 
 export default function MapView() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
-
+  const { t, language } = useI18n();
+  
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
   const [posX, setPosX] = useState('0.00');
@@ -241,7 +243,7 @@ gridClientRef.current.on('change', () => {
   };
 
   const saveMap = () => {
-    if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
+    if (!selectedRobotId) return alert(t('common.selectRobot'));
 
     const mapName = window.prompt("Entrez un nom pour cette carte (ex: zone_a) :");
     if (!mapName || mapName.trim() === "") return;
@@ -319,7 +321,7 @@ gridClientRef.current.on('change', () => {
           <Card title="Bridge Controls">
             {!selectedRobotId && (
               <div style={{ padding: '6px', background: '#FF9800', color: '#FCFDFF', marginBottom: '6px', borderRadius: '5px', textAlign: 'center', fontSize: '12px' }}>
-                Veuillez sélectionner un robot
+                {t('common.selectRobot')}
               </div>
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -386,7 +388,7 @@ gridClientRef.current.on('change', () => {
 
           <Card title="Robot Override">
             <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '15px' }}>
-              Utilisez les flèches pour déplacer le robot et scanner la zone.
+              {language === 'en' ? 'Use arrows to move the robot and scan the area.' : 'Utilisez les fleches pour deplacer le robot et scanner la zone.'}
             </p>
             <div className={`teleop-pad ${!isRobotOnline ? 'blocked' : ''}`} style={{ margin: 0 }}>
               <button className="teleop-btn up" onMouseDown={() => startMove(1, 0)} onMouseUp={stopMove} onMouseLeave={stopMove}>▲</button>
@@ -403,7 +405,7 @@ gridClientRef.current.on('change', () => {
             <ul className="teleop-list">
               <li>
                 <span>Robot Target</span>
-                <strong>{selectedRobotId || "Aucun"}</strong>
+                <strong>{selectedRobotId || t('common.none')}</strong>
               </li>
               <li>
                 <span>Broker MQTT</span>

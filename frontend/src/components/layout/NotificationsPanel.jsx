@@ -1,15 +1,16 @@
 import { X, Bell, AlertCircle, Check, Info } from 'lucide-react';
+import { useI18n } from '../../i18n/LanguageContext';
 import './notificationsPanel.css';
 
-const mockNotifications = [
-  { id: 1, type: 'success', title: 'Mission complétée', message: 'La mission M-001 est terminée avec succès', time: '5 min', read: false },
-  { id: 2, type: 'warning', title: 'Batterie faible', message: 'Le robot R-02 a une batterie à 20%', time: '15 min', read: false },
-  { id: 3, type: 'info', title: 'Nouvelle carte', message: 'Une nouvelle carte a été ajoutée au système', time: '1 heure', read: true },
-  { id: 4, type: 'error', title: 'Erreur de connexion', message: 'Impossible de se connecter au robot R-05', time: '2 heures', read: false },
-  { id: 5, type: 'success', title: 'Synchronisation', message: 'Les données ont été synchronisées', time: '3 heures', read: true },
-];
-
 export default function NotificationsPanel({ isOpen = false, onClose = () => {} }) {
+  const { t } = useI18n();
+  const mockNotifications = [
+    { id: 1, type: 'success', title: t('notifications.missionCompleted'), message: t('notifications.missionCompletedMsg'), time: `5 ${t('notifications.min')}`, read: false },
+    { id: 2, type: 'warning', title: t('notifications.lowBattery'), message: t('notifications.lowBatteryMsg'), time: `15 ${t('notifications.min')}`, read: false },
+    { id: 3, type: 'info', title: t('notifications.newMap'), message: t('notifications.newMapMsg'), time: `1 ${t('notifications.hour')}`, read: true },
+    { id: 4, type: 'error', title: t('notifications.connectionError'), message: t('notifications.connectionErrorMsg'), time: `2 ${t('notifications.hours')}`, read: false },
+    { id: 5, type: 'success', title: t('notifications.sync'), message: t('notifications.syncMsg'), time: `3 ${t('notifications.hours')}`, read: true },
+  ];
   const getIcon = (type) => {
     switch (type) {
       case 'success':
@@ -30,19 +31,19 @@ export default function NotificationsPanel({ isOpen = false, onClose = () => {} 
     <div 
       className={`notifications-panel ${isOpen ? 'notifications-open' : ''}`}
       role="complementary"
-      aria-label="Notifications"
+      aria-label={t('notifications.title')}
       aria-hidden={!isOpen}
     >
       <div className="notifications-header">
         <div className="notifications-title">
           <Bell size={20} />
-          <h2>Notifications {unreadCount > 0 && <span className="badge">{unreadCount}</span>}</h2>
+          <h2>{t('notifications.title')} {unreadCount > 0 && <span className="badge">{unreadCount}</span>}</h2>
         </div>
         <button 
           className="close-button" 
           onClick={onClose}
-          aria-label="Fermer les notifications"
-          title="Fermer (Esc)"
+          aria-label={t('notifications.close')}
+          title={t('notifications.closeEsc')}
         >
           <X size={20} />
         </button>
@@ -70,14 +71,14 @@ export default function NotificationsPanel({ isOpen = false, onClose = () => {} 
         ) : (
           <div className="empty-notifications">
             <Bell size={32} />
-            <p>Aucune notification</p>
+            <p>{t('notifications.none')}</p>
           </div>
         )}
       </div>
 
       <div className="notifications-footer">
-        <button className="mark-all-read" aria-label="Marquer toutes les notifications comme lues">
-          Marquer tout comme lu
+        <button className="mark-all-read" aria-label={t('notifications.markAllRead')}>
+          {t('notifications.markAllRead')}
         </button>
       </div>
     </div>

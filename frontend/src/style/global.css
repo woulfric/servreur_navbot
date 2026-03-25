@@ -1,20 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap');
+
 /* CSS Variables for Light and Dark Mode - Custom Palette */
 :root[data-theme="light"],
 :root {
-<<<<<<< HEAD
-=======
-  /* Typography */
-  --font-family-ui: 'Avenir Next', 'Nunito', 'Segoe UI', Arial, sans-serif;
-  --font-weight-heavy: 900;
-  --font-weight-regular: 400;
-  --font-size-h1: 32px;
-  --font-size-h2: 24px;
-  --font-size-h3: 18px;
-  --font-size-body: 16px;
-  --font-size-data: 14px;
-  --font-size-legend: 12px;
-
->>>>>>> origin/frontend
   /* Light Mode - Text Colors */
   --text-primary: #081F5C;
   --text-secondary: #24386E;
@@ -38,7 +26,6 @@
   --card-shadow: 0 4px 20px rgba(8, 31, 92, 0.08);
   --sidebar-bg: #FCFDFF;
   --button-hover-bg: #D4EBFF;
-<<<<<<< HEAD
   --accent-primary: #22c55e;
   --accent-secondary: #16a34a;
   
@@ -47,21 +34,6 @@
   --color-warning: #eab308;
   --color-error: #ef4444;
   --color-info: #3b82f6;
-=======
-  --accent-primary: #546FA8;
-  --accent-secondary: #24386E;
-  
-  /* Status Colors - Light Mode */
-  --color-success: #22C55E;
-  --color-warning: #FF9800;
-  --color-error: #EF4444;
-  --color-info: #546FA8;
-
-  /* Map Colors */
-  --map-wall-static: #333333;
-  --map-history: #888888;
-  --map-slam-bg: #D4EBFF;
->>>>>>> origin/frontend
 }
 
 :root[data-theme="dark"] {
@@ -72,11 +44,7 @@
   --text-light: #24386E;
   
   /* Dark Mode - Background Colors */
-<<<<<<< HEAD
   --bg-primary: radial-gradient(circle at top, #081F5C, #0d1436);
-=======
-  --bg-primary: radial-gradient(circle at top, #24386E, #081F5C);
->>>>>>> origin/frontend
   --bg-secondary: rgba(36, 56, 110, 0.3);
   --bg-tertiary: rgba(36, 56, 110, 0.2);
   --bg-hover: rgba(212, 235, 255, 0.1);
@@ -92,7 +60,6 @@
   --card-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   --sidebar-bg: rgba(36, 56, 110, 0.2);
   --button-hover-bg: rgba(212, 235, 255, 0.15);
-<<<<<<< HEAD
   --accent-primary: #4ade80;
   --accent-secondary: #22c55e;
   
@@ -101,21 +68,6 @@
   --color-warning: #facc15;
   --color-error: #f87171;
   --color-info: #60a5fa;
-=======
-  --accent-primary: #546FA8;
-  --accent-secondary: #24386E;
-  
-  /* Status Colors - Dark Mode */
-  --color-success: #22C55E;
-  --color-warning: #FF9800;
-  --color-error: #EF4444;
-  --color-info: #546FA8;
-
-  /* Map Colors */
-  --map-wall-static: #333333;
-  --map-history: #888888;
-  --map-slam-bg: #D4EBFF;
->>>>>>> origin/frontend
 }
 
 /* RESET */
@@ -123,74 +75,26 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-<<<<<<< HEAD
-  font-family: 'Inter', system-ui, sans-serif;
-=======
-  font-family: var(--font-family-ui);
->>>>>>> origin/frontend
+  font-family: 'Geist', 'Segoe UI', Arial, sans-serif;
 }
 
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-<<<<<<< HEAD
-=======
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  line-height: 1.45;
->>>>>>> origin/frontend
   min-height: 100vh;
   overflow-y: auto;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-<<<<<<< HEAD
-=======
-h1,
-h2,
-h3 {
-  color: var(--text-primary);
-  letter-spacing: 0.2px;
-}
-
-h1 {
-  font-size: var(--font-size-h1);
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.15;
-}
-
-h2 {
-  font-size: var(--font-size-h2);
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.2;
-}
-
-h3 {
-  font-size: var(--font-size-h3);
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.25;
-}
-
-.typo-label {
-  font-size: var(--font-size-legend);
-  font-weight: var(--font-weight-heavy);
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-}
-
-.typo-data {
-  font-size: var(--font-size-data);
-  font-weight: var(--font-weight-regular);
-}
-
-.typo-legend {
-  font-size: var(--font-size-legend);
-  font-weight: var(--font-weight-regular);
-}
-
->>>>>>> origin/frontend
 body.modal-open {
   overflow: hidden;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 

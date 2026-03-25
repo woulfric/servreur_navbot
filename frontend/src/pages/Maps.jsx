@@ -3,9 +3,11 @@ import Card from '../components/common/Card';
 import { useState, useEffect } from 'react';
 import { Map, BarChart3, Calendar } from 'lucide-react';
 import MapCanvas from '../components/MapCanvas';
+import { useI18n } from '../i18n/LanguageContext';
 import './maps.css';
 
 export default function Maps() {
+  const { language } = useI18n();
   const [selectedMap, setSelectedMap] = useState(null);
   const [maps, setMaps] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -50,7 +52,7 @@ export default function Maps() {
 
   return (
     <DashboardLayout>
-      <Card title={`Cartes disponibles (${maps.length})`} span={1}>
+      <Card title={`${language === 'en' ? 'Available maps' : 'Cartes disponibles'} (${maps.length})`} span={1}>
         <div className="maps-list">
           {maps.length > 0 ? (
             maps.map(map => (
@@ -71,42 +73,32 @@ export default function Maps() {
               </div>
             ))
           ) : (
-            <div className="empty-maps">Aucune carte disponible sur le serveur</div>
+            <div className="empty-maps">{language === 'en' ? 'No map available on server' : 'Aucune carte disponible sur le serveur'}</div>
           )}
         </div>
       </Card>
 
       {selectedMap && (
-        <Card title={`Aperçu: ${selectedMap.name}`} span={2}>
+        <Card title={`${language === 'en' ? 'Preview' : 'Apercu'}: ${selectedMap.name}`} span={2}>
           <div className="map-preview">
-            {/* L'image SVG statique est conservée ici pour l'instant */}
-            <Card title={`Aperçu: ${selectedMap.name}`} span={2}>
-              <div className="map-preview">
-                {/* On affiche le vrai contenu du fichier PGM */}
-                <MapCanvas mapName={selectedMap.name} />
-              </div>
-                  
-              <div className="map-details">
-                {/* ... garde le reste du code des détails inchangé ... */}
-              </div>
-            </Card>
+            <MapCanvas mapName={selectedMap.name} />
           </div>
 
           <div className="map-details">
             <div className="detail-item">
-              <span>Taille</span>
+              <span>{language === 'en' ? 'Size' : 'Taille'}</span>
               <strong>{selectedMap.size}</strong>
             </div>
             <div className="detail-item">
-              <span>Points de repère</span>
+              <span>{language === 'en' ? 'Waypoints' : 'Points de repere'}</span>
               <strong>{selectedMap.pointsCount}</strong>
             </div>
             <div className="detail-item">
-              <span>Robots actifs</span>
+              <span>{language === 'en' ? 'Active robots' : 'Robots actifs'}</span>
               <strong>{selectedMap.robotCount}</strong>
             </div>
             <div className="detail-item">
-              <span>Modifiée</span>
+              <span>{language === 'en' ? 'Updated' : 'Modifiee'}</span>
               <strong>{selectedMap.lastModified}</strong>
             </div>
           </div>
@@ -114,31 +106,31 @@ export default function Maps() {
       )}
 
       {selectedMap && (
-        <Card title="Actions" span={1}>
+        <Card title={language === 'en' ? 'Actions' : 'Actions'} span={1}>
           <div className="actions-grid">
-            <button className="action-btn action-btn-primary" onClick={() => alert(`Édition de ${selectedMap.name}`)}>
-              ✏️ Éditer
+            <button className="action-btn action-btn-primary" onClick={() => alert(`${language === 'en' ? 'Editing' : 'Edition'} ${selectedMap.name}`)}>
+              ✏️ {language === 'en' ? 'Edit' : 'Editer'}
             </button>
             <button className="action-btn action-btn-secondary" onClick={() => handleDuplicateMap(selectedMap)}>
-              📋 Dupliquer
+              📋 {language === 'en' ? 'Duplicate' : 'Dupliquer'}
             </button>
             <button className="action-btn action-btn-secondary" onClick={() => handleExportMap(selectedMap)}>
-              📥 Exporter
+              📥 {language === 'en' ? 'Export' : 'Exporter'}
             </button>
             <button className="action-btn action-btn-warning" onClick={() => setShowDeleteConfirm(true)}>
-              🗑️ Supprimer
+              🗑️ {language === 'en' ? 'Delete' : 'Supprimer'}
             </button>
           </div>
 
           {showDeleteConfirm && (
             <div className="delete-confirm">
-              <p>Êtes-vous sûr de vouloir supprimer <strong>{selectedMap.name}</strong>?</p>
+              <p>{language === 'en' ? 'Are you sure you want to delete' : 'Etes-vous sur de vouloir supprimer'} <strong>{selectedMap.name}</strong>?</p>
               <div className="confirm-buttons">
                 <button className="btn-danger" onClick={() => handleDeleteMap(selectedMap.id)}>
-                  Confirmer
+                  {language === 'en' ? 'Confirm' : 'Confirmer'}
                 </button>
                 <button className="btn-cancel" onClick={() => setShowDeleteConfirm(false)}>
-                  Annuler
+                  {language === 'en' ? 'Cancel' : 'Annuler'}
                 </button>
               </div>
             </div>

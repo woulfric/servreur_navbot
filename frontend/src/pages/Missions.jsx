@@ -16,9 +16,11 @@ import {
   AlertTriangle,
   LoaderCircle,
 } from 'lucide-react';
+import { useI18n } from '../i18n/LanguageContext';
 import './missions.css';
 
 export default function Missions() {
+  const { language } = useI18n();
   const [robots, setRobots] = useState([]);
   const [poiMaps, setPoiMaps] = useState([]);
   const [missions, setMissions] = useState([]);
@@ -89,6 +91,32 @@ export default function Missions() {
       default:
         return '';
     }
+  };
+
+  const getStatusLabel = (status) => {
+    if (language !== 'en') return status;
+
+    switch (status) {
+      case 'Pending':
+        return 'Pending';
+      case 'Running':
+        return 'Running';
+      case 'Completed':
+        return 'Completed';
+      case 'Failed':
+        return 'Failed';
+      default:
+        return status;
+    }
+  };
+
+  const getResultLabel = (result) => {
+    if (language !== 'en') return result;
+    if (result.includes('Succes')) return 'Success';
+    if (result.includes('En cours')) return 'Running';
+    if (result.includes('Echec')) return 'Failed - Manual stop';
+    if (result.includes('Attente')) return 'Waiting to start';
+    return result;
   };
 
   const getResultColor = (result) => {
@@ -269,10 +297,10 @@ const handleLaunchMission = async (mission) => {
 
   return (
     <DashboardLayout>
-      <Card title="Créer une mission" span={1}>
+      <Card title={language === 'en' ? 'Create a mission' : 'Creer une mission'} span={1}>
         <div className="mission-create-panel">
           <div className="form-group">
-            <label>Robot</label>
+            <label>{language === 'en' ? 'Robot' : 'Robot'}</label>
             <select
               value={missionForm.robotId}
               onChange={(e) => {
@@ -300,13 +328,13 @@ const handleLaunchMission = async (mission) => {
                   );
                 })
               ) : (
-                <option value="">Aucun robot disponible</option>
+                <option value="">{language === 'en' ? 'No robot available' : 'Aucun robot disponible'}</option>
               )}
             </select>
           </div>
 
           <div className="form-group">
-            <label>Plan POI</label>
+            <label>{language === 'en' ? 'POI Plan' : 'Plan POI'}</label>
             <select
               value={missionForm.poiPlanName}
               onChange={(e) =>
@@ -323,7 +351,7 @@ const handleLaunchMission = async (mission) => {
                   </option>
                 ))
               ) : (
-                <option value="">Aucun plan POI disponible</option>
+                <option value="">{language === 'en' ? 'No POI plan available' : 'Aucun plan POI disponible'}</option>
               )}
             </select>
           </div>
@@ -331,7 +359,7 @@ const handleLaunchMission = async (mission) => {
           {selectedPlan && (
             <div className="mission-plan-summary">
               <div className="summary-row">
-                <span>Carte</span>
+                <span>{language === 'en' ? 'Map' : 'Carte'}</span>
                 <strong>{selectedPlan.mapName}</strong>
               </div>
               <div className="summary-row">
@@ -339,7 +367,7 @@ const handleLaunchMission = async (mission) => {
                 <strong>{selectedPlan.poisCount}</strong>
               </div>
               <div className="summary-row">
-                <span>Dernière mise à jour</span>
+                <span>{language === 'en' ? 'Last update' : 'Derniere mise a jour'}</span>
                 <strong>{new Date(selectedPlan.updatedAt).toLocaleString()}</strong>
               </div>
             </div>
@@ -351,12 +379,12 @@ const handleLaunchMission = async (mission) => {
             disabled={!canCreateMission}
           >
             <PlusCircle size={16} />
-            Créer la mission
+            {language === 'en' ? 'Create mission' : 'Creer la mission'}
           </button>
         </div>
       </Card>
 
-      <Card title="Missions" span={2}>
+      <Card title={language === 'en' ? 'Missions' : 'Missions'} span={2}>
         <div className="missions-filters">
           {['All', 'Pending', 'Running', 'Completed', 'Failed'].map((status) => (
             <button
@@ -373,9 +401,9 @@ const handleLaunchMission = async (mission) => {
           <div className="missions-header">
             <div className="col-name">Mission</div>
             <div className="col-robot">Robot</div>
-            <div className="col-plan">Plan</div>
-            <div className="col-status">Statut</div>
-            <div className="col-duration">Durée</div>
+            <div className="col-plan">{language === 'en' ? 'Plan' : 'Plan'}</div>
+            <div className="col-status">{language === 'en' ? 'Status' : 'Statut'}</div>
+            <div className="col-duration">{language === 'en' ? 'Duration' : 'Duree'}</div>
             <div className="col-actions">Actions</div>
           </div>
 
@@ -407,7 +435,7 @@ const handleLaunchMission = async (mission) => {
                 <div className="col-status">
                   <span className={`status-badge ${getStatusColor(mission.status)}`}>
                     {getStatusIcon(mission.status)}
-                    {mission.status}
+                    {getStatusLabel(mission.status)}
                   </span>
                 </div>
 
@@ -425,7 +453,7 @@ const handleLaunchMission = async (mission) => {
                       e.stopPropagation();
                       setSelectedMission(mission);
                     }}
-                    title="Voir les détails"
+                    title={language === 'en' ? 'View details' : 'Voir les details'}
                   >
                     <Info size={16} />
                   </button>
@@ -437,7 +465,7 @@ const handleLaunchMission = async (mission) => {
                         e.stopPropagation();
                         handleLaunchMission(mission);
                       }}
-                      title="Lancer"
+                      title={language === 'en' ? 'Launch' : 'Lancer'}
                     >
                       <Play size={16} />
                     </button>
@@ -450,7 +478,7 @@ const handleLaunchMission = async (mission) => {
                         e.stopPropagation();
                         handleStopMission(mission);
                       }}
-                      title="Arrêter"
+                      title={language === 'en' ? 'Stop' : 'Arreter'}
                     >
                       <Square size={16} />
                     </button>
@@ -463,7 +491,7 @@ const handleLaunchMission = async (mission) => {
                         e.stopPropagation();
                         handleRetryMission(mission);
                       }}
-                      title="Relancer"
+                      title={language === 'en' ? 'Retry' : 'Relancer'}
                     >
                       <RotateCcw size={16} />
                     </button>
@@ -474,7 +502,7 @@ const handleLaunchMission = async (mission) => {
                       e.stopPropagation();
                       handleDeleteMission(mission.id);
                     }}
-                    title="Supprimer"
+                    title={language === 'en' ? 'Delete' : 'Supprimer'}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -482,19 +510,19 @@ const handleLaunchMission = async (mission) => {
               </div>
             ))
           ) : (
-            <div className="empty-missions">Aucune mission trouvée</div>
+            <div className="empty-missions">{language === 'en' ? 'No mission found' : 'Aucune mission trouvee'}</div>
           )}
         </div>
       </Card>
 
       {selectedMission && (
-        <Card title={`Détails : ${selectedMission.name}`} span={1}>
+        <Card title={`${language === 'en' ? 'Details' : 'Details'} : ${selectedMission.name}`} span={1}>
           <div className="mission-details">
             <div className="detail-section">
-              <h4>Informations générales</h4>
+              <h4>{language === 'en' ? 'General information' : 'Informations generales'}</h4>
 
               <div className="detail-row">
-                <span>Robot assigné</span>
+                <span>{language === 'en' ? 'Assigned robot' : 'Robot assigne'}</span>
                 <strong>{selectedMission.robot}</strong>
               </div>
 
@@ -504,7 +532,7 @@ const handleLaunchMission = async (mission) => {
               </div>
 
               <div className="detail-row">
-                <span>Carte</span>
+                <span>{language === 'en' ? 'Map' : 'Carte'}</span>
                 <strong>{selectedMission.mapName}</strong>
               </div>
 
@@ -514,45 +542,45 @@ const handleLaunchMission = async (mission) => {
               </div>
 
               <div className="detail-row">
-                <span>Statut</span>
+                <span>{language === 'en' ? 'Status' : 'Statut'}</span>
                 <span className={`status-badge ${getStatusColor(selectedMission.status)}`}>
                   {getStatusIcon(selectedMission.status)}
-                  {selectedMission.status}
+                  {getStatusLabel(selectedMission.status)}
                 </span>
               </div>
 
               <div className="detail-row">
-                <span>Résultat</span>
+                <span>{language === 'en' ? 'Result' : 'Resultat'}</span>
                 <span className={`result-badge ${getResultColor(selectedMission.result)}`}>
-                  {selectedMission.result}
+                  {getResultLabel(selectedMission.result)}
                 </span>
               </div>
             </div>
 
             <div className="detail-section">
-              <h4>Chronologie</h4>
+              <h4>{language === 'en' ? 'Timeline' : 'Chronologie'}</h4>
 
               <div className="detail-row">
-                <span>Début</span>
+                <span>{language === 'en' ? 'Start' : 'Debut'}</span>
                 <strong>{selectedMission.startTime || '-'}</strong>
               </div>
 
               <div className="detail-row">
-                <span>Fin</span>
+                <span>{language === 'en' ? 'End' : 'Fin'}</span>
                 <strong>{selectedMission.endTime || '-'}</strong>
               </div>
 
               <div className="detail-row">
-                <span>Durée</span>
+                <span>{language === 'en' ? 'Duration' : 'Duree'}</span>
                 <strong>{selectedMission.duration}</strong>
               </div>
             </div>
 
             <div className="detail-section">
-              <h4>Progression</h4>
+              <h4>{language === 'en' ? 'Progress' : 'Progression'}</h4>
 
               <div className="detail-row">
-                <span>Couverture</span>
+                <span>{language === 'en' ? 'Coverage' : 'Couverture'}</span>
                 <div className="progress-bar">
                   <div
                     className="progress-fill"
@@ -567,7 +595,7 @@ const handleLaunchMission = async (mission) => {
             </div>
 
             <div className="detail-section">
-              <h4>Description</h4>
+              <h4>{language === 'en' ? 'Description' : 'Description'}</h4>
               <p className="description-text">{selectedMission.description}</p>
             </div>
 
@@ -578,7 +606,7 @@ const handleLaunchMission = async (mission) => {
                   onClick={() => handleLaunchMission(selectedMission)}
                 >
                   <Play size={16} />
-                  Lancer la mission
+                  {language === 'en' ? 'Launch mission' : 'Lancer la mission'}
                 </button>
               )}
 
@@ -589,7 +617,7 @@ const handleLaunchMission = async (mission) => {
                     onClick={() => handleStopMission(selectedMission)}
                   >
                     <Square size={16} />
-                    Arrêter
+                    {language === 'en' ? 'Stop' : 'Arreter'}
                   </button>
 
                   <button
@@ -597,7 +625,7 @@ const handleLaunchMission = async (mission) => {
                     onClick={() => handleCompleteMission(selectedMission)}
                   >
                     <CheckCircle2 size={16} />
-                    Marquer comme terminée
+                    {language === 'en' ? 'Mark as completed' : 'Marquer comme terminee'}
                   </button>
                 </>
               )}
@@ -608,13 +636,13 @@ const handleLaunchMission = async (mission) => {
                   onClick={() => handleRetryMission(selectedMission)}
                 >
                   <RotateCcw size={16} />
-                  Relancer la mission
+                  {language === 'en' ? 'Retry mission' : 'Relancer la mission'}
                 </button>
               )}
 
               <button className="detail-btn export-btn">
                 <Download size={16} />
-                Exporter le rapport
+                {language === 'en' ? 'Export report' : 'Exporter le rapport'}
               </button>
             </div>
           </div>

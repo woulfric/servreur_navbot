@@ -3,10 +3,12 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import Card from '../components/common/Card';
 import { Circle } from 'lucide-react';
 import { RobotContext } from '../context/RobotContext';
+import { useI18n } from '../i18n/LanguageContext';
 import './robots.css';
 
 export default function Robots() {
   const { activeRobots, selectedRobotId, setSelectedRobotId } = useContext(RobotContext);
+  const { language } = useI18n();
 
   // Adaptation des donnees brutes du backend pour l'interface utilisateur
   // Les champs batterie et localisation seront mis a jour plus tard via la telemetrie
@@ -15,8 +17,8 @@ export default function Robots() {
     name: robot.id, // L'ID MQTT sert de nom par defaut
     status: robot.status === 'online' ? 'Online' : 'Offline',
     battery: '--',
-    location: 'En attente',
-    lastSeen: 'À l\'instant'
+    location: language === 'en' ? 'Waiting' : 'En attente',
+    lastSeen: language === 'en' ? 'Just now' : 'A l\'instant'
   }));
 
   const onlineRobots = formattedRobots.filter(r => r.status === 'Online');
@@ -57,51 +59,51 @@ export default function Robots() {
           setSelectedRobotId(robot.id);
         }}
       >
-        Sélectionner
+        {language === 'en' ? 'Select' : 'Selectionner'}
       </button>
     </div>
   );
 
   return (
     <DashboardLayout>
-      <Card title={`Robots Fleet (${formattedRobots.length})`} span={2}>
+      <Card title={`${language === 'en' ? 'Robots Fleet' : 'Flotte robots'} (${formattedRobots.length})`} span={2}>
         <div className="robots-list">
           
           <div className="robots-section">
             <h3 className="section-title online">
-              <Circle size={16} fill="#22c55e" color="#22c55e" /> En ligne ({onlineRobots.length})
+              <Circle size={16} fill="#22c55e" color="#22c55e" /> {language === 'en' ? 'Online' : 'En ligne'} ({onlineRobots.length})
             </h3>
             <div className="robots-group">
               {onlineRobots.length > 0 ? (
                 onlineRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">Aucun robot connecté au broker</p>
+                <p className="empty-state">{language === 'en' ? 'No robot connected to broker' : 'Aucun robot connecte au broker'}</p>
               )}
             </div>
           </div>
 
           <div className="robots-section">
             <h3 className="section-title idle">
-              <Circle size={16} fill="#eab308" color="#eab308" /> En attente ({idleRobots.length})
+              <Circle size={16} fill="#eab308" color="#eab308" /> {language === 'en' ? 'Idle' : 'En attente'} ({idleRobots.length})
             </h3>
             <div className="robots-group">
               {idleRobots.length > 0 ? (
                 idleRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">Aucun robot en attente</p>
+                <p className="empty-state">{language === 'en' ? 'No idle robot' : 'Aucun robot en attente'}</p>
               )}
             </div>
           </div>
 
           <div className="robots-section">
             <h3 className="section-title offline">
-              <Circle size={16} fill="#ef4444" color="#ef4444" /> Hors ligne ({offlineRobots.length})
+              <Circle size={16} fill="#ef4444" color="#ef4444" /> {language === 'en' ? 'Offline' : 'Hors ligne'} ({offlineRobots.length})
             </h3>
             <div className="robots-group">
               {offlineRobots.length > 0 ? (
                 offlineRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">Historique vide</p>
+                <p className="empty-state">{language === 'en' ? 'No history' : 'Historique vide'}</p>
               )}
             </div>
           </div>
@@ -110,7 +112,7 @@ export default function Robots() {
       </Card>
 
       {selectedRobot && (
-        <Card title={`Détails: ${selectedRobot.name}`} span={1}>
+        <Card title={`${language === 'en' ? 'Details' : 'Details'}: ${selectedRobot.name}`} span={1}>
           <div className="robot-details">
             <div className="detail-row">
               <span>Status</span>
@@ -119,15 +121,15 @@ export default function Robots() {
               </strong>
             </div>
             <div className="detail-row">
-              <span>Batterie</span>
+              <span>{language === 'en' ? 'Battery' : 'Batterie'}</span>
               <strong>{selectedRobot.battery}</strong>
             </div>
             <div className="detail-row">
-              <span>Localisation</span>
+              <span>{language === 'en' ? 'Location' : 'Localisation'}</span>
               <strong>{selectedRobot.location}</strong>
             </div>
             <div className="detail-row">
-              <span>Dernier contact</span>
+              <span>{language === 'en' ? 'Last seen' : 'Dernier contact'}</span>
               <strong>{selectedRobot.lastSeen}</strong>
             </div>
           </div>

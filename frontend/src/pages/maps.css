@@ -76,7 +76,7 @@
 /* Aperçu de la map */
 .map-preview {
   width: 100%;
-  aspect-ratio: 1.25 / 1;
+  height: 420px;
   border-radius: 12px;
   overflow: hidden;
   background: #e8ecf1;
@@ -329,6 +329,7 @@
   }
 
   .map-preview {
+    height: 360px;
     margin-bottom: 12px;
   }
 
@@ -429,7 +430,7 @@
   }
 
   .map-preview {
-    aspect-ratio: 1.25 / 1;
+    height: 300px;
     margin-bottom: 12px;
   }
 
@@ -532,7 +533,7 @@
   }
 
   .map-preview {
-    aspect-ratio: 1.25 / 1;
+    height: 260px;
     margin-bottom: 10px;
     border-radius: 8px;
   }
