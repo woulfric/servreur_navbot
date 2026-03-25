@@ -15,6 +15,7 @@ import actionlib
 
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, Quaternion
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from sensor_msgs.msg import BatteryState
 from tf.transformations import quaternion_from_euler
 
 MQTT_BROKER = "138.68.110.228"
@@ -28,6 +29,7 @@ TB3_MODEL = "burger"
 cmd_pub = None
 mqtt_client_ref = None
 move_base_client = None
+last_battery_publish_time = 0.0
 
 ROS_SETUP = "source /opt/ros/noetic/setup.bash"
 CATKIN_SETUP = "source ~/catkin_ws/devel/setup.bash"
@@ -95,6 +97,59 @@ def publish_mission_log(message, level="info", extra=None):
             )
     except Exception:
         pass
+
+
+def publish_battery_telemetry(voltage=None, percentage=None):
+    global mqtt_client_ref
+
+    payload = {
+        "robotId": ROBOT_ID,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+
+    if percentage is not None:
+        payload["batteryPercent"] = int(round(percentage))
+
+    if voltage is not None:
+        payload["batteryVoltage"] = round(voltage, 2)
+
+    try:
+        if mqtt_client_ref is not None:
+            mqtt_client_ref.publish(
+                "navbot/" + ROBOT_ID + "/telemetry",
+                json.dumps(payload),
+                qos=1,
+                retain=True
+            )
+    except Exception:
+        pass
+
+
+def on_battery_state(msg):
+    global last_battery_publish_time
+
+    now = time.time()
+
+    if last_battery_publish_time and (now - last_battery_publish_time) < 3.0:
+        return
+
+    voltage = None
+    percentage = None
+
+    if msg.voltage == msg.voltage and msg.voltage > 0.0:
+        voltage = float(msg.voltage)
+
+    if msg.percentage == msg.percentage:
+        percentage = float(msg.percentage)
+        if percentage <= 1.0:
+            percentage *= 100.0
+        percentage = max(0.0, min(100.0, percentage))
+
+    if voltage is None and percentage is None:
+        return
+
+    publish_battery_telemetry(voltage=voltage, percentage=percentage)
+    last_battery_publish_time = now
 
 
 def ensure_bringup():
@@ -434,29 +489,29 @@ def on_message(client, userdata, msg):
             rospy.loginfo("Commande systeme recue : " + str(action))
 
             if action == "start_slam":
-                cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false > /tmp/slam.log 2>&1 &"
-                os.system(cmd)
+                cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false"
+                run_shell_background(cmd, "/tmp/slam.log")
                 rospy.loginfo("Process SLAM demarre localement.")
 
             elif action == "stop_slam":
-                os.system("pkill -f turtlebot3_slam")
+                run_shell("pkill -f turtlebot3_slam")
                 rospy.loginfo("Process SLAM arrete.")
 
             elif action == "reset_slam":
-                os.system("pkill -f turtlebot3_slam")
+                run_shell("pkill -f turtlebot3_slam")
                 rospy.loginfo("Arret du SLAM. Attente de 4 secondes pour liberer le roscore...")
                 time.sleep(4)
-                cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false > /tmp/slam.log 2>&1 &"
-                os.system(cmd)
+                cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false"
+                run_shell_background(cmd, "/tmp/slam.log")
                 rospy.loginfo("Process SLAM redemarre.")
 
             elif action == "start_bridge":
-                cmd = ENV_PREFIX + " && roslaunch rosbridge_server rosbridge_websocket.launch > /tmp/bridge.log 2>&1 &"
-                os.system(cmd)
+                cmd = ENV_PREFIX + " && roslaunch rosbridge_server rosbridge_websocket.launch"
+                run_shell_background(cmd, "/tmp/bridge.log")
                 rospy.loginfo("Process rosbridge demarre.")
 
             elif action == "stop_bridge":
-                os.system("pkill -f rosbridge_websocket")
+                run_shell("pkill -f rosbridge_websocket")
                 rospy.loginfo("Process rosbridge arrete.")
 
             elif action == "save_map":
@@ -483,7 +538,12 @@ def on_message(client, userdata, msg):
                     counter += 1
 
                 cmd = ENV_PREFIX + " && rosrun map_server map_saver -f " + map_path
-                os.system(cmd)
+                result = run_shell(cmd)
+
+                if result.returncode != 0:
+                    rospy.logerr("Erreur map_saver : " + result.stderr.decode("utf-8"))
+                    return
+
                 rospy.loginfo("Carte brute sauvegardee sous : " + map_path)
 
                 time.sleep(2)
@@ -519,6 +579,7 @@ def main():
 
     rospy.init_node('mqtt_ros_bridge', anonymous=True)
     cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+    rospy.Subscriber('/battery_state', BatteryState, on_battery_state, queue_size=10)
 
     ensure_bringup()
 

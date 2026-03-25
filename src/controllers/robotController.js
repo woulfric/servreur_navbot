@@ -293,7 +293,20 @@ const getRobots = async (req, res) => {
 };
 
 const getTelemetry = (req, res) => {
-  res.json({ status: 'ok' });
+  const { robotId } = req.query;
+
+  if (robotId) {
+    return res.json({
+      status: 'success',
+      robotId,
+      telemetry: mqttService.getRobotTelemetry(robotId),
+    });
+  }
+
+  res.json({
+    status: 'success',
+    telemetry: mqttService.getAllTelemetry(),
+  });
 };
 
 const moveRobot = (req, res) => {

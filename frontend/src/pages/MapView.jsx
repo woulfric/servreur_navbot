@@ -14,7 +14,7 @@ export default function MapView() {
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
   const [posX, setPosX] = useState('0.00');
   const [posY, setPosY] = useState('0.00');
-  const [battery, setBattery] = useState('--.-');
+  const [battery, setBattery] = useState('--');
 
   const moveInterval = useRef(null);
   const mapContainerRef = useRef(null);
@@ -22,18 +22,12 @@ export default function MapView() {
   const viewerRef = useRef(null);
   const gridClientRef = useRef(null);
   const odomListenerRef = useRef(null);
-  const batteryListenerRef = useRef(null);
 
   const cleanupRos = () => {
     try {
       if (odomListenerRef.current) {
         odomListenerRef.current.unsubscribe();
         odomListenerRef.current = null;
-      }
-
-      if (batteryListenerRef.current) {
-        batteryListenerRef.current.unsubscribe();
-        batteryListenerRef.current = null;
       }
 
       if (rosRef.current) {
@@ -118,17 +112,6 @@ export default function MapView() {
       setPosY(pose.pose.pose.position.y.toFixed(2));
     });
 
-    batteryListenerRef.current = new window.ROSLIB.Topic({
-      ros: ros,
-      name: '/battery_state',
-      messageType: 'sensor_msgs/BatteryState'
-    });
-
-    batteryListenerRef.current.subscribe((msg) => {
-      if (msg.voltage) {
-        setBattery(msg.voltage.toFixed(1));
-      }
-    });
   };
 
   const connectRos = () => {
@@ -168,6 +151,54 @@ export default function MapView() {
       cleanupRos();
     };
   }, []);
+
+  useEffect(() => {
+    let intervalId = null;
+    let cancelled = false;
+
+    const fetchBattery = async () => {
+      if (!selectedRobotId) {
+        setBattery('--');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/telemetry?robotId=${encodeURIComponent(selectedRobotId)}`);
+        const data = await response.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        const batteryPercent = data?.telemetry?.batteryPercent;
+
+        if (typeof batteryPercent === 'number' && Number.isFinite(batteryPercent)) {
+          setBattery(batteryPercent);
+          return;
+        }
+
+        setBattery('--');
+      } catch (error) {
+        console.error('Erreur lecture batterie MQTT:', error);
+        if (!cancelled) {
+          setBattery('--');
+        }
+      }
+    };
+
+    fetchBattery();
+
+    if (selectedRobotId) {
+      intervalId = setInterval(fetchBattery, 2000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [selectedRobotId]);
 
   const toggleSlam = (action) => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
@@ -383,7 +414,7 @@ export default function MapView() {
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <div style={{ fontSize: '12px', color: '#888888', textAlign: 'center' }}>Batterie</div>
-                <div className="telemetry-val battery-val">{battery} V</div>
+                <div className="telemetry-val battery-val">{battery}%</div>
               </div>
             </div>
           </Card>

@@ -15,6 +15,7 @@ const client = mqtt.connect('mqtt://138.68.110.228:1883', {
 
 const activeRobots = new Map();
 const currentMissionByRobot = new Map();
+const telemetryByRobot = new Map();
 
 const inferRobotType = (robotId) => {
   const normalizedRobotId = String(robotId || '').toLowerCase();
@@ -144,6 +145,81 @@ const handleRobotStatus = async (robotId, message) => {
   await upsertRobotStatus(robotId, 'offline');
 };
 
+const toFiniteNumber = (value) => {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  return number;
+};
+
+const toIsoTimestamp = (value) => {
+  const date = value ? new Date(value) : new Date();
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString();
+  }
+
+  return date.toISOString();
+};
+
+const normalizeTelemetryPayload = (payload) => {
+  const rawPercent =
+    toFiniteNumber(payload && payload.batteryPercent) ??
+    toFiniteNumber(payload && payload.battery_percentage) ??
+    toFiniteNumber(payload && payload.percentage) ??
+    toFiniteNumber(payload && payload.battery);
+
+  const rawVoltage =
+    toFiniteNumber(payload && payload.batteryVoltage) ??
+    toFiniteNumber(payload && payload.battery_voltage) ??
+    toFiniteNumber(payload && payload.voltage);
+
+  let batteryPercent = rawPercent;
+
+  if (batteryPercent !== null && batteryPercent <= 1) {
+    batteryPercent *= 100;
+  }
+
+  if (batteryPercent !== null) {
+    batteryPercent = Math.max(0, Math.min(100, Math.round(batteryPercent)));
+  }
+
+  const batteryVoltage =
+    rawVoltage !== null && rawVoltage > 0
+      ? Number(rawVoltage.toFixed(2))
+      : null;
+
+  return {
+    batteryPercent,
+    batteryVoltage,
+    timestamp: toIsoTimestamp(payload && payload.timestamp),
+  };
+};
+
+const handleRobotTelemetry = async (robotId, message) => {
+  const payload = JSON.parse(message.toString());
+  const telemetry = normalizeTelemetryPayload(payload);
+  const existingRobot = activeRobots.get(robotId) || {
+    id: robotId,
+    robotId,
+    name: robotId,
+    type: inferRobotType(robotId),
+    status: 'online',
+  };
+
+  telemetryByRobot.set(robotId, telemetry);
+  activeRobots.set(robotId, {
+    ...existingRobot,
+    batteryPercent: telemetry.batteryPercent,
+    batteryVoltage: telemetry.batteryVoltage,
+    telemetryAt: telemetry.timestamp,
+    lastSeen: Date.now(),
+  });
+};
+
 const handleMapUpload = async (robotId, message) => {
   const payload = JSON.parse(message.toString());
   const { mapName, pgm, yaml } = payload;
@@ -226,6 +302,11 @@ client.on('message', async (topic, message) => {
       return;
     }
 
+    if (channel === 'telemetry') {
+      await handleRobotTelemetry(robotId, message);
+      return;
+    }
+
     if (channel === 'map_upload') {
       await handleMapUpload(robotId, message);
       return;
@@ -241,6 +322,18 @@ client.on('message', async (topic, message) => {
 
 const getActiveRobots = () => {
   return Array.from(activeRobots.values());
+};
+
+const getRobotTelemetry = (robotId) => {
+  if (!robotId) {
+    return null;
+  }
+
+  return telemetryByRobot.get(robotId) || null;
+};
+
+const getAllTelemetry = () => {
+  return Object.fromEntries(telemetryByRobot.entries());
 };
 
 const publishVelocityCommand = (robotId, linear, angular) => {
@@ -283,5 +376,7 @@ module.exports = {
   publishSystemCommand,
   publishMissionCommand,
   getActiveRobots,
+  getRobotTelemetry,
+  getAllTelemetry,
   client,
 };

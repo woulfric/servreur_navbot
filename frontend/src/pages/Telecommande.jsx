@@ -101,26 +101,62 @@ export default function Telecommande() {
           setStatus('DISCONNECTED');
         });
 
-        batteryListener = new window.ROSLIB.Topic({
-          ros: ros,
-          name: '/battery_state',
-          messageType: 'sensor_msgs/BatteryState'
-        });
-        batteryListener.subscribe((bat) => {
-          let percent = Math.round((bat.percentage || 0) * 100);
-          if (percent > 100) percent = 100;
-          if (percent < 0 || Number.isNaN(percent)) percent = 0;
-          setBattery(percent);
-        });
       })
       .catch((err) => console.error('Erreur config:', err));
 
     return () => {
       if (odomListener) odomListener.unsubscribe();
-      if (batteryListener) batteryListener.unsubscribe();
       if (rosRef.current) rosRef.current.close();
     };
   }, []);
+
+  useEffect(() => {
+    let intervalId = null;
+    let cancelled = false;
+
+    const fetchBattery = async () => {
+      if (!selectedRobotId) {
+        setBattery('--');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/telemetry?robotId=${encodeURIComponent(selectedRobotId)}`);
+        const data = await response.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        const batteryPercent = data?.telemetry?.batteryPercent;
+
+        if (typeof batteryPercent === 'number' && Number.isFinite(batteryPercent)) {
+          setBattery(batteryPercent);
+          return;
+        }
+
+        setBattery('--');
+      } catch (error) {
+        console.error('Erreur lecture batterie MQTT:', error);
+        if (!cancelled) {
+          setBattery('--');
+        }
+      }
+    };
+
+    fetchBattery();
+
+    if (selectedRobotId) {
+      intervalId = setInterval(fetchBattery, 2000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [selectedRobotId]);
 
   const sendCommand = (lin, ang) => {
     if (isEmergency || !selectedRobotId) return;
