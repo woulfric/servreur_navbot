@@ -14,17 +14,29 @@
   },
   "pois": [
     {
-      "id": "d404cc36-9b81-4c96-a8c8-7c157a74071d",
+      "id": "dab02bdf-76bc-43c0-933c-5cf9e34cdcba",
       "name": "POI 1",
       "type": "Zone",
-      "x": -2.461,
-      "y": 1.213,
+      "x": -0.85,
+      "y": -0.305,
       "description": "",
       "priority": "Medium",
       "status": "Active",
       "visits": 0,
-      "created": "2026-03-23"
+      "created": "2026-03-25"
+    },
+    {
+      "id": "3eeb3107-6f2c-4ab9-bbac-2295f191ee21",
+      "name": "POI 2",
+      "type": "Zone",
+      "x": -1.905,
+      "y": 0.769,
+      "description": "",
+      "priority": "Medium",
+      "status": "Active",
+      "visits": 0,
+      "created": "2026-03-25"
     }
   ],
-  "updatedAt": "2026-03-23T14:16:56.577Z"
+  "updatedAt": "2026-03-25T00:01:46.413Z"
 }

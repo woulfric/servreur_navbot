@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
-import './mapView.css'; 
+import './mapView.css';
 
 export default function MapView() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
-  
+
   const [status, setStatus] = useState('CONNECTING...');
   const [mapInfo, setMapInfo] = useState('WAITING DATA...');
   const [posX, setPosX] = useState('0.00');
@@ -18,73 +18,93 @@ export default function MapView() {
   const rosRef = useRef(null);
   const viewerRef = useRef(null);
   const gridClientRef = useRef(null);
+  const odomListenerRef = useRef(null);
+  const batteryListenerRef = useRef(null);
 
-  useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(config => {
-        const rosUrl = 'wss://ros.navbot.dev';
-        const ros = new window.ROSLIB.Ros({ url: rosUrl });
-        rosRef.current = ros;
+  const rosUrl = 'wss://ros.navbot.dev';
 
-        ros.on('connection', () => {
-          setStatus('CONNECTED');
-          setupMapViewer(ros);
-        });
-        ros.on('error', () => setStatus('ERROR'));
-        ros.on('close', () => setStatus('DISCONNECTED'));
-      })
-      .catch(err => console.error("Erreur config:", err));
+  const cleanupRos = () => {
+    try {
+      if (odomListenerRef.current) {
+        odomListenerRef.current.unsubscribe();
+        odomListenerRef.current = null;
+      }
 
-    return () => {
-      if (rosRef.current) rosRef.current.close();
-    };
-  }, []);
+      if (batteryListenerRef.current) {
+        batteryListenerRef.current.unsubscribe();
+        batteryListenerRef.current = null;
+      }
+
+      if (rosRef.current) {
+        rosRef.current.close();
+        rosRef.current = null;
+      }
+
+      viewerRef.current = null;
+      gridClientRef.current = null;
+
+      if (mapContainerRef.current) {
+        mapContainerRef.current.innerHTML = '';
+      }
+    } catch (e) {
+      console.error('Erreur cleanup ROS:', e);
+    }
+  };
 
   const setupMapViewer = (ros) => {
     if (!mapContainerRef.current) return;
+
     mapContainerRef.current.innerHTML = '';
 
     viewerRef.current = new window.ROS2D.Viewer({
       divID: mapContainerRef.current.id,
       width: mapContainerRef.current.offsetWidth || 800,
-      height: 600, 
+      height: 600,
       background: '#1a1a1a'
     });
 
     gridClientRef.current = new window.ROS2D.OccupancyGridClient({
       ros: ros,
       rootObject: viewerRef.current.scene,
-      continuous: true 
+      continuous: true
     });
 
-    gridClientRef.current.on('change', () => {
-      setMapInfo('GRID RECEIVED');
-      viewerRef.current.scaleToDimensions(gridClientRef.current.currentGrid.width, gridClientRef.current.currentGrid.height);
-      viewerRef.current.shift(gridClientRef.current.currentGrid.pose.position.x, gridClientRef.current.currentGrid.pose.position.y);
-    });
+gridClientRef.current.on('change', () => {
+  setMapInfo('GRID RECEIVED');
 
+  const grid = gridClientRef.current.currentGrid;
+  if (!grid || !viewerRef.current) return;
+
+  viewerRef.current.scaleToDimensions(grid.width, grid.height);
+  viewerRef.current.shift(
+    grid.pose.position.x,
+    grid.pose.position.y
+  );
+
+  viewerRef.current.scene.scaleX *= 0.65;
+  viewerRef.current.scene.scaleY *= 0.65;
+});
     const robotMarker = new window.ROS2D.NavigationArrow({
-      size: 0.8, 
-      strokeSize: 0.02, 
-      strokeColor: window.createjs.Graphics.getRGB(231, 76, 60, 1), 
-      fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), 
+      size: 0.8,
+      strokeSize: 0.02,
+      strokeColor: window.createjs.Graphics.getRGB(231, 76, 60, 1),
+      fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9),
       pulse: false
     });
+
     robotMarker.visible = false;
     viewerRef.current.scene.addChild(robotMarker);
 
-    // Topic Odométrie
-    const odomListener = new window.ROSLIB.Topic({
+    odomListenerRef.current = new window.ROSLIB.Topic({
       ros: ros,
       name: '/odom',
       messageType: 'nav_msgs/Odometry'
     });
 
-    odomListener.subscribe((pose) => {
+    odomListenerRef.current.subscribe((pose) => {
       robotMarker.x = pose.pose.pose.position.x;
-      robotMarker.y = -pose.pose.pose.position.y; 
-      
+      robotMarker.y = -pose.pose.pose.position.y;
+
       const q = pose.pose.pose.orientation;
       const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
       const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
@@ -96,27 +116,62 @@ export default function MapView() {
       setPosY(pose.pose.pose.position.y.toFixed(2));
     });
 
-    // Topic Batterie
-    const batteryListener = new window.ROSLIB.Topic({
+    batteryListenerRef.current = new window.ROSLIB.Topic({
       ros: ros,
       name: '/battery_state',
       messageType: 'sensor_msgs/BatteryState'
     });
 
-    batteryListener.subscribe((msg) => {
+    batteryListenerRef.current.subscribe((msg) => {
       if (msg.voltage) {
         setBattery(msg.voltage.toFixed(1));
       }
     });
   };
 
+  const connectRos = () => {
+    cleanupRos();
+    setStatus('CONNECTING...');
+    setMapInfo('WAITING DATA...');
+
+    try {
+      const ros = new window.ROSLIB.Ros({ url: rosUrl });
+      rosRef.current = ros;
+
+      ros.on('connection', () => {
+        setStatus('CONNECTED');
+        setupMapViewer(ros);
+      });
+
+      ros.on('error', (err) => {
+        console.error('Erreur ROS:', err);
+        setStatus('ERROR');
+      });
+
+      ros.on('close', () => {
+        setStatus('DISCONNECTED');
+      });
+    } catch (err) {
+      console.error('Erreur config:', err);
+      setStatus('ERROR');
+    }
+  };
+
+  useEffect(() => {
+    connectRos();
+
+    return () => {
+      cleanupRos();
+    };
+  }, []);
+
   const toggleSlam = (action) => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
-    
+
     setMapInfo(action === 'start' ? 'STARTING SLAM...' : 'STOPPING SLAM...');
     const endpoint = action === 'start' ? '/api/start_slam' : '/api/stop_slam';
-    
-    fetch(endpoint, { 
+
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ robotId: selectedRobotId })
@@ -125,8 +180,11 @@ export default function MapView() {
       .then(data => {
         if (data.status === 'success') {
           setMapInfo(action === 'start' ? 'SLAM RUNNING' : 'SLAM STOPPED');
+
           if (action === 'start') {
-            setTimeout(() => window.location.reload(), 2000); 
+            setTimeout(() => {
+              connectRos();
+            }, 2500);
           }
         }
       })
@@ -140,36 +198,46 @@ export default function MapView() {
     if (!selectedRobotId) return;
 
     setMapInfo('RESETTING SLAM...');
-    fetch('/api/reset_slam', { 
+    fetch('/api/reset_slam', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ robotId: selectedRobotId })
     })
       .then(() => {
-        setTimeout(() => window.location.reload(), 5000); 
+        setTimeout(() => {
+          connectRos();
+        }, 5000);
       })
-      .catch(err => setMapInfo('ERROR RESET'));
+      .catch(err => {
+        console.error(err);
+        setMapInfo('ERROR RESET');
+      });
   };
 
-  // Nouvelle fonction pour contrôler le Bridge
   const toggleBridge = (action) => {
     if (!selectedRobotId) return alert("Sélectionnez un robot d'abord.");
-    
+
     setMapInfo(action === 'start' ? 'STARTING ROSBRIDGE...' : 'STOPPING ROSBRIDGE...');
-    fetch(`/api/${action}_bridge`, { 
+    fetch(`/api/${action}_bridge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ robotId: selectedRobotId })
     })
       .then(res => res.json())
-      .then(data => {
+      .then(() => {
         if (action === 'start') {
-          setTimeout(() => window.location.reload(), 3000);
+          setTimeout(() => {
+            connectRos();
+          }, 3000);
         } else {
+          cleanupRos();
           setStatus('DISCONNECTED');
         }
       })
-      .catch(err => setMapInfo('ERROR BRIDGE RPC'));
+      .catch(err => {
+        console.error(err);
+        setMapInfo('ERROR BRIDGE RPC');
+      });
   };
 
   const saveMap = () => {
@@ -179,11 +247,11 @@ export default function MapView() {
     if (!mapName || mapName.trim() === "") return;
 
     setMapInfo('SAVING MAP...');
-    fetch('/api/save_map', { 
+    fetch('/api/save_map', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        robotId: selectedRobotId, 
+      body: JSON.stringify({
+        robotId: selectedRobotId,
         mapName: mapName.trim()
       })
     })
@@ -196,16 +264,19 @@ export default function MapView() {
           setMapInfo('SAVE FAILED');
         }
       })
-      .catch(err => setMapInfo('ERROR SAVING'));
+      .catch(err => {
+        console.error(err);
+        setMapInfo('ERROR SAVING');
+      });
   };
 
   const sendCommand = (lin, ang) => {
     if (!selectedRobotId) return;
-    
+
     fetch('/api/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ robotId: selectedRobotId, linear: lin * 0.2, angular: ang * 0.8 }) 
+      body: JSON.stringify({ robotId: selectedRobotId, linear: lin * 0.2, angular: ang * 0.8 })
     }).catch(e => console.error(e));
   };
 
@@ -221,8 +292,8 @@ export default function MapView() {
       moveInterval.current = null;
     }
     if (!selectedRobotId) return;
-    
-    fetch('/api/stop', { 
+
+    fetch('/api/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ robotId: selectedRobotId })
@@ -232,19 +303,19 @@ export default function MapView() {
   return (
     <DashboardLayout contentClassName="layout-content--split">
       <div className="teleop-page mapview-page">
-        
+
         <div className="teleop-col-left">
           <Card title={`SLAM Visualizer - Status : ${mapInfo}`}>
-            <div 
-              id="ros-map-container" 
-              ref={mapContainerRef} 
-              className="map-container" 
+            <div
+              id="ros-map-container"
+              ref={mapContainerRef}
+              className="map-container"
             ></div>
           </Card>
         </div>
 
         <div className="teleop-col-right">
-          
+
           <Card title="Bridge Controls">
             {!selectedRobotId && (
               <div style={{ padding: '6px', background: '#FF9800', color: '#FCFDFF', marginBottom: '6px', borderRadius: '5px', textAlign: 'center', fontSize: '12px' }}>
@@ -252,15 +323,15 @@ export default function MapView() {
               </div>
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
-                style={{ flex: 1, padding: '8px', background: '#546FA8', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }} 
+              <button
+                style={{ flex: 1, padding: '8px', background: '#546FA8', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }}
                 onClick={() => toggleBridge('start')}
                 disabled={!isRobotOnline}
               >
                 START BRIDGE
               </button>
-              <button 
-                style={{ flex: 1, padding: '8px', background: '#24386E', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }} 
+              <button
+                style={{ flex: 1, padding: '8px', background: '#24386E', color: '#FCFDFF', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: isRobotOnline ? 1 : 0.5 }}
                 onClick={() => toggleBridge('stop')}
                 disabled={!isRobotOnline}
               >
@@ -269,27 +340,26 @@ export default function MapView() {
             </div>
           </Card>
 
-          {/* SLAM Controls fusionnés */}
           <Card title="SLAM Controls">
             <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-              <button 
-                style={{ flex: 1, padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+              <button
+                style={{ flex: 1, padding: '15px', background: '#d35400', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }}
                 onClick={resetMap}
                 disabled={!isRobotOnline}
               >
                 START / RESET SLAM
               </button>
-              <button 
-                style={{ flex: 1, padding: '15px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+              <button
+                style={{ flex: 1, padding: '15px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }}
                 onClick={() => toggleSlam('stop')}
                 disabled={!isRobotOnline}
               >
                 STOP SLAM
               </button>
             </div>
-            
-            <button 
-              style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }} 
+
+            <button
+              style={{ width: '100%', padding: '15px', background: '#2980b9', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isRobotOnline ? 1 : 0.5 }}
               onClick={saveMap}
               disabled={!isRobotOnline}
             >
