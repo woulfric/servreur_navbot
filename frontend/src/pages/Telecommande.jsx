@@ -3,6 +3,7 @@ import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
 import { useI18n } from '../i18n/LanguageContext';
+import { getRosbridgeUrl } from '../utils/rosbridge';
 import './telecommande.css';
 
 export default function Telecommande() {
@@ -26,41 +27,6 @@ export default function Telecommande() {
   const cameraTopic = '/oakd/rgb/preview/image_raw';
   const videoUrl = `http://${robotIpCam}:8080/stream?topic=${cameraTopic}&type=mjpeg&quality=30`;
 
-  useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(config => {
-        // const rosUrl = config.ROSBRIDGE_URL || `ws://${window.location.hostname}:9090`;
-        const rosUrl = 'wss://ros.navbot.dev';
-        const ros = new window.ROSLIB.Ros({ url: rosUrl });
-        rosRef.current = ros;
-
-        ros.on('connection', () => {
-          setStatus('CONNECTED');
-          setupMapViewer(ros);
-        });
-        ros.on('error', () => setStatus('ERROR'));
-        ros.on('close', () => setStatus('DISCONNECTED'));
-
-        const batListener = new window.ROSLIB.Topic({
-          ros: ros,
-          name: '/battery_state',
-          messageType: 'sensor_msgs/BatteryState'
-        });
-        batListener.subscribe((bat) => {
-          let percent = Math.round(bat.percentage * 100);
-          if (percent > 100) percent = 100;
-          setBattery(percent);
-        });
-
-      })
-      .catch(err => console.error("Erreur config:", err));
-
-    return () => {
-      if (rosRef.current) rosRef.current.close();
-    };
-  }, []);
-
   const setupMapViewer = (ros) => {
     if (!mapContainerRef.current) return;
     mapContainerRef.current.innerHTML = '';
@@ -75,7 +41,7 @@ export default function Telecommande() {
     const gridClient = new window.ROS2D.OccupancyGridClient({
       ros: ros,
       rootObject: viewerRef.current.scene,
-      continuous: false 
+      continuous: false
     });
 
     gridClient.on('change', () => {
@@ -98,7 +64,7 @@ export default function Telecommande() {
     odomListener.subscribe((pose) => {
       robotMarker.x = pose.pose.pose.position.x;
       robotMarker.y = pose.pose.pose.position.y;
-      
+
       const q = pose.pose.pose.orientation;
       const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
       const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
@@ -110,7 +76,51 @@ export default function Telecommande() {
       setPosX(pose.pose.pose.position.x.toFixed(2));
       setPosY(pose.pose.pose.position.y.toFixed(2));
     });
+
+    return odomListener;
   };
+
+  useEffect(() => {
+    let batteryListener = null;
+    let odomListener = null;
+
+    getRosbridgeUrl()
+      .then((rosUrl) => {
+        const ros = new window.ROSLIB.Ros({ url: rosUrl });
+        rosRef.current = ros;
+
+        ros.on('connection', () => {
+          setStatus('CONNECTED');
+          odomListener = setupMapViewer(ros);
+        });
+
+        ros.on('error', () => {
+          setStatus('ERROR');
+        });
+        ros.on('close', () => {
+          setStatus('DISCONNECTED');
+        });
+
+        batteryListener = new window.ROSLIB.Topic({
+          ros: ros,
+          name: '/battery_state',
+          messageType: 'sensor_msgs/BatteryState'
+        });
+        batteryListener.subscribe((bat) => {
+          let percent = Math.round((bat.percentage || 0) * 100);
+          if (percent > 100) percent = 100;
+          if (percent < 0 || Number.isNaN(percent)) percent = 0;
+          setBattery(percent);
+        });
+      })
+      .catch((err) => console.error('Erreur config:', err));
+
+    return () => {
+      if (odomListener) odomListener.unsubscribe();
+      if (batteryListener) batteryListener.unsubscribe();
+      if (rosRef.current) rosRef.current.close();
+    };
+  }, []);
 
   const sendCommand = (lin, ang) => {
     if (isEmergency || !selectedRobotId) return;

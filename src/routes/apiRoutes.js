@@ -3,6 +3,7 @@ const router = express.Router();
 const robotController = require('../controllers/robotController');
 
 router.get('/active', robotController.getActiveRobots);
+router.get('/robots', robotController.getRobots);
 router.get('/telemetry', robotController.getTelemetry);
 router.post('/move', robotController.moveRobot);
 router.post('/stop', robotController.stopRobot);
@@ -22,5 +23,7 @@ router.get('/poi-maps', robotController.listPoiMaps);
 router.get('/poi-maps/:mapName', robotController.getPoiMap);
 
 router.post('/start_mission', robotController.startMission);
+router.get('/missions', robotController.listMissions);
+router.get('/missions/:missionId/logs', robotController.getMissionLogs);
 
 module.exports = router;

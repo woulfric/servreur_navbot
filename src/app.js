@@ -2,21 +2,34 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const { PORT } = require('./config/config');
-const rosService = require('./services/rosService');
-const apiRoutes = require('./routes/apiRoutes');
+const { connectToDatabase } = require('./config/database');
 
 // Initialisation
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Connexion à ROS
-rosService.connect();
+const startServer = async () => {
+    try {
+        await connectToDatabase();
 
-// Routes API
-app.use('/api', apiRoutes); 
+        const rosService = require('./services/rosService');
+        const apiRoutes = require('./routes/apiRoutes');
 
-// Lancement Serveur
-app.listen(PORT, () => {
-    console.log(`Serveur NavBot lancé sur http://localhost:${PORT}`);
-});
+        // Connexion à ROS
+        rosService.connect();
+
+        // Routes API
+        app.use('/api', apiRoutes);
+
+        // Lancement Serveur
+        app.listen(PORT, () => {
+            console.log(`Serveur NavBot lancé sur http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error('Impossible de démarrer le serveur:', error.message);
+        process.exit(1);
+    }
+};
+
+startServer();

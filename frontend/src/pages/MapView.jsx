@@ -3,6 +3,7 @@ import Card from '../components/common/Card';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
 import { useI18n } from '../i18n/LanguageContext';
+import { getRosbridgeUrl } from '../utils/rosbridge';
 import './mapView.css'; 
 
 export default function MapView() {
@@ -22,8 +23,6 @@ export default function MapView() {
   const gridClientRef = useRef(null);
   const odomListenerRef = useRef(null);
   const batteryListenerRef = useRef(null);
-
-  const rosUrl = 'wss://ros.navbot.dev';
 
   const cleanupRos = () => {
     try {
@@ -71,21 +70,22 @@ export default function MapView() {
       continuous: true
     });
 
-gridClientRef.current.on('change', () => {
-  setMapInfo('GRID RECEIVED');
+    gridClientRef.current.on('change', () => {
+      setMapInfo('GRID RECEIVED');
 
-  const grid = gridClientRef.current.currentGrid;
-  if (!grid || !viewerRef.current) return;
+      const grid = gridClientRef.current.currentGrid;
+      if (!grid || !viewerRef.current) return;
 
-  viewerRef.current.scaleToDimensions(grid.width, grid.height);
-  viewerRef.current.shift(
-    grid.pose.position.x,
-    grid.pose.position.y
-  );
+      viewerRef.current.scaleToDimensions(grid.width, grid.height);
+      viewerRef.current.shift(
+        grid.pose.position.x,
+        grid.pose.position.y
+      );
 
-  viewerRef.current.scene.scaleX *= 0.65;
-  viewerRef.current.scene.scaleY *= 0.65;
-});
+      viewerRef.current.scene.scaleX *= 0.65;
+      viewerRef.current.scene.scaleY *= 0.65;
+    });
+
     const robotMarker = new window.ROS2D.NavigationArrow({
       size: 0.8,
       strokeSize: 0.02,
@@ -104,13 +104,13 @@ gridClientRef.current.on('change', () => {
     });
 
     odomListenerRef.current.subscribe((pose) => {
-      robotMarker.x = pose.pose.pose.position.x;
-      robotMarker.y = -pose.pose.pose.position.y;
-
       const q = pose.pose.pose.orientation;
       const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
       const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
       const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+      robotMarker.x = pose.pose.pose.position.x;
+      robotMarker.y = -pose.pose.pose.position.y;
       robotMarker.rotation = -yaw * (180.0 / Math.PI);
       robotMarker.visible = true;
 
@@ -136,27 +136,29 @@ gridClientRef.current.on('change', () => {
     setStatus('CONNECTING...');
     setMapInfo('WAITING DATA...');
 
-    try {
-      const ros = new window.ROSLIB.Ros({ url: rosUrl });
-      rosRef.current = ros;
+    getRosbridgeUrl()
+      .then((rosUrl) => {
+        const ros = new window.ROSLIB.Ros({ url: rosUrl });
+        rosRef.current = ros;
 
-      ros.on('connection', () => {
-        setStatus('CONNECTED');
-        setupMapViewer(ros);
-      });
+        ros.on('connection', () => {
+          setStatus('CONNECTED');
+          setupMapViewer(ros);
+        });
 
-      ros.on('error', (err) => {
-        console.error('Erreur ROS:', err);
+        ros.on('error', (err) => {
+          console.error('Erreur ROS:', err);
+          setStatus('ERROR');
+        });
+
+        ros.on('close', () => {
+          setStatus('DISCONNECTED');
+        });
+      })
+      .catch((err) => {
+        console.error('Erreur config:', err);
         setStatus('ERROR');
       });
-
-      ros.on('close', () => {
-        setStatus('DISCONNECTED');
-      });
-    } catch (err) {
-      console.error('Erreur config:', err);
-      setStatus('ERROR');
-    }
   };
 
   useEffect(() => {

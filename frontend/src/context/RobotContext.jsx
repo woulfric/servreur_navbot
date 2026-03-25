@@ -1,26 +1,26 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useEffect, useMemo, useState } from 'react';
 
 export const RobotContext = createContext();
 
 export const RobotProvider = ({ children }) => {
-  const [activeRobots, setActiveRobots] = useState([]);
+  const [robots, setRobots] = useState([]);
   const [selectedRobotId, setSelectedRobotId] = useState(null);
 
-  const fetchActiveRobots = async () => {
+  const fetchRobots = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/active');
+      const response = await fetch('/api/robots');
       const data = await response.json();
 
       if (data.status === 'success') {
-        const robots = Array.isArray(data.robots) ? data.robots : [];
-        setActiveRobots(robots);
+        const nextRobots = Array.isArray(data.robots) ? data.robots : [];
+        setRobots(nextRobots);
 
         setSelectedRobotId((prevSelectedRobotId) => {
           if (!prevSelectedRobotId) {
             return null;
           }
 
-          const stillExists = robots.some((robot) => robot.id === prevSelectedRobotId);
+          const stillExists = nextRobots.some((robot) => robot.id === prevSelectedRobotId);
           return stillExists ? prevSelectedRobotId : null;
         });
       }
@@ -30,12 +30,17 @@ export const RobotProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchActiveRobots();
-    const interval = setInterval(fetchActiveRobots, 3000);
+    fetchRobots();
+    const interval = setInterval(fetchRobots, 3000);
     return () => clearInterval(interval);
   }, []);
 
+  const activeRobots = useMemo(() => {
+    return robots.filter((robot) => robot.status === 'online');
+  }, [robots]);
+
   const value = {
+    robots,
     activeRobots,
     selectedRobotId,
     setSelectedRobotId,

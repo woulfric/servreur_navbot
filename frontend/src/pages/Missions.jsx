@@ -6,12 +6,9 @@ import {
   Clock,
   Info,
   RotateCcw,
-  Trash2,
-  Square,
   Download,
   Play,
   MapPinned,
-  PlusCircle,
   CheckCircle2,
   AlertTriangle,
   LoaderCircle,
@@ -19,13 +16,147 @@ import {
 import { useI18n } from '../i18n/LanguageContext';
 import './missions.css';
 
+const POLL_INTERVAL_MS = 4000;
+const STATUS_FILTERS = ['All', 'Pending', 'Running', 'Completed', 'Failed'];
+const TERMINAL_STATUSES = new Set(['Completed', 'Failed']);
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return '-';
+  }
+
+  return new Date(value).toLocaleString();
+};
+
+const formatDuration = (startValue, endValue) => {
+  if (!startValue) {
+    return '-';
+  }
+
+  const start = new Date(startValue).getTime();
+  const end = endValue ? new Date(endValue).getTime() : Date.now();
+
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
+    return '-';
+  }
+
+  const totalMinutes = Math.floor((end - start) / 60000);
+
+  if (totalMinutes < 1) {
+    return '< 1 min';
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `${hours} h ${minutes} min`;
+  }
+
+  return `${totalMinutes} min`;
+};
+
+const getRobotKey = (robot) => {
+  return robot.id || robot.robotId || robot.name || '';
+};
+
+const getRobotLabel = (robot) => {
+  return robot.name || robot.id || robot.robotId || 'Robot';
+};
+
+const getResultTone = (status) => {
+  switch (status) {
+    case 'Completed':
+      return 'result-success';
+    case 'Running':
+      return 'result-running';
+    case 'Failed':
+      return 'result-failed';
+    case 'Pending':
+      return 'result-pending';
+    default:
+      return '';
+  }
+};
+
+const getResultText = (status, logs) => {
+  const latestLog = Array.isArray(logs) && logs.length > 0 ? logs[logs.length - 1] : null;
+
+  if (latestLog?.message) {
+    return latestLog.message;
+  }
+
+  switch (status) {
+    case 'Completed':
+      return 'Mission terminee';
+    case 'Running':
+      return 'En cours';
+    case 'Failed':
+      return 'Echec mission';
+    case 'Pending':
+      return 'Attente de lancement';
+    default:
+      return status;
+  }
+};
+
+const getCoverageText = (status, poiCount, logs) => {
+  if (status === 'Completed') {
+    return '100%';
+  }
+
+  if (!poiCount || poiCount <= 0) {
+    if (status === 'Running') {
+      return '10%';
+    }
+
+    return '0%';
+  }
+
+  const reachedCount = logs.filter((log) => String(log.message).includes('POI atteint')).length;
+  const navigationCount = logs.filter((log) =>
+    String(log.message).includes('Navigation vers POI')
+  ).length;
+
+  let ratio = reachedCount / poiCount;
+
+  if (status === 'Running' && navigationCount > reachedCount) {
+    ratio = Math.max(ratio, (reachedCount + 0.5) / poiCount);
+  }
+
+  if (status === 'Failed' && ratio === 0 && logs.length > 0) {
+    ratio = 0.05;
+  }
+
+  const percentage = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+  return `${percentage}%`;
+};
+
+const getLogToneClass = (level) => {
+  switch (String(level || '').toLowerCase()) {
+    case 'error':
+      return 'mission-log-error';
+    case 'warn':
+    case 'warning':
+      return 'mission-log-warn';
+    default:
+      return 'mission-log-info';
+  }
+};
+
 export default function Missions() {
   const { language } = useI18n();
   const [robots, setRobots] = useState([]);
   const [poiMaps, setPoiMaps] = useState([]);
   const [missions, setMissions] = useState([]);
-  const [selectedMission, setSelectedMission] = useState(null);
+  const [missionLogsById, setMissionLogsById] = useState({});
+  const [selectedMissionId, setSelectedMissionId] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSubmittingMission, setIsSubmittingMission] = useState(false);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
+  const [formMessage, setFormMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const [missionForm, setMissionForm] = useState({
     robotId: '',
@@ -33,50 +164,266 @@ export default function Missions() {
     poiPlanName: '',
   });
 
+  const robotsById = useMemo(() => {
+    return robots.reduce((accumulator, robot) => {
+      const robotKey = getRobotKey(robot);
+
+      if (robotKey) {
+        accumulator[robotKey] = robot;
+      }
+
+      return accumulator;
+    }, {});
+  }, [robots]);
+
+  const plansByName = useMemo(() => {
+    return poiMaps.reduce((accumulator, plan) => {
+      accumulator[plan.name] = plan;
+      return accumulator;
+    }, {});
+  }, [poiMaps]);
+
+  const syncMissionForm = (robotsList, plansList) => {
+    setMissionForm((previousForm) => {
+      const previousRobotExists = robotsList.some(
+        (robot) => getRobotKey(robot) === previousForm.robotId
+      );
+      const nextRobot =
+        (previousRobotExists &&
+          robotsList.find((robot) => getRobotKey(robot) === previousForm.robotId)) ||
+        robotsList[0] ||
+        null;
+
+      const previousPlanExists = plansList.some(
+        (plan) => plan.name === previousForm.poiPlanName
+      );
+      const nextPlan =
+        (previousPlanExists &&
+          plansList.find((plan) => plan.name === previousForm.poiPlanName)) ||
+        plansList[0] ||
+        null;
+
+      return {
+        robotId: nextRobot ? getRobotKey(nextRobot) : '',
+        robotName: nextRobot ? getRobotLabel(nextRobot) : '',
+        poiPlanName: nextPlan ? nextPlan.name : '',
+      };
+    });
+  };
+
+  const fetchRobots = async () => {
+    const response = await fetch('/api/active');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors du chargement des robots');
+    }
+
+    const robotsList = Array.isArray(data.robots) ? data.robots : [];
+    setRobots(robotsList);
+
+    return robotsList;
+  };
+
+  const fetchPoiMaps = async () => {
+    const response = await fetch('/api/poi-maps');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors du chargement des plans POI');
+    }
+
+    const plans = Array.isArray(data.poiMaps) ? data.poiMaps : [];
+    setPoiMaps(plans);
+
+    return plans;
+  };
+
+  const fetchMissions = async () => {
+    const response = await fetch('/api/missions');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors du chargement des missions');
+    }
+
+    const missionsList = Array.isArray(data.missions) ? data.missions : [];
+    setMissions(missionsList);
+
+    return missionsList;
+  };
+
+  const fetchMissionLogs = async (missionId, { silent = false } = {}) => {
+    if (!missionId) {
+      return [];
+    }
+
+    if (!silent) {
+      setIsLogsLoading(true);
+    }
+
+    try {
+      const response = await fetch(`/api/missions/${missionId}/logs`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur lors du chargement des logs');
+      }
+
+      const logs = Array.isArray(data.logs) ? data.logs : [];
+
+      setMissionLogsById((previousLogs) => ({
+        ...previousLogs,
+        [missionId]: logs,
+      }));
+
+      return logs;
+    } catch (error) {
+      console.error('Erreur chargement logs mission:', error);
+      return [];
+    } finally {
+      if (!silent) {
+        setIsLogsLoading(false);
+      }
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/active')
-      .then((res) => res.json())
-      .then((data) => {
-        const robotsList = Array.isArray(data.robots) ? data.robots : [];
-        setRobots(robotsList);
+    let isCancelled = false;
 
-        if (robotsList.length > 0) {
-          const firstRobot = robotsList[0];
-          setMissionForm((prev) => ({
-            ...prev,
-            robotId: firstRobot.id || firstRobot.robotId || firstRobot.name || '',
-            robotName: firstRobot.name || firstRobot.id || firstRobot.robotId || 'Robot',
-          }));
+    const bootstrap = async () => {
+      try {
+        setIsInitialLoading(true);
+        setErrorMessage('');
+
+        await Promise.all([fetchRobots(), fetchPoiMaps(), fetchMissions()]);
+      } catch (error) {
+        console.error('Erreur initialisation missions:', error);
+        if (!isCancelled) {
+          setErrorMessage(error.message);
         }
-      })
-      .catch((err) => {
-        console.error('Erreur chargement robots:', err);
-        setRobots([]);
-      });
-
-    fetch('/api/poi-maps')
-      .then((res) => res.json())
-      .then((data) => {
-        const plans = Array.isArray(data.poiMaps) ? data.poiMaps : [];
-        setPoiMaps(plans);
-
-        if (plans.length > 0) {
-          setMissionForm((prev) => ({
-            ...prev,
-            poiPlanName: plans[0].name,
-          }));
+      } finally {
+        if (!isCancelled) {
+          setIsInitialLoading(false);
         }
-      })
-      .catch((err) => {
-        console.error('Erreur chargement plans POI:', err);
-        setPoiMaps([]);
-      });
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
+  useEffect(() => {
+    syncMissionForm(robots, poiMaps);
+  }, [robots, poiMaps]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        await Promise.all([fetchRobots(), fetchMissions()]);
+      } catch (error) {
+        console.error('Erreur rafraichissement missions:', error);
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setSelectedMissionId((previousMissionId) => {
+      const previousStillExists = missions.some(
+        (mission) => mission.missionId === previousMissionId
+      );
+
+      if (previousStillExists) {
+        return previousMissionId;
+      }
+
+      return missions[0]?.missionId || null;
+    });
+  }, [missions]);
+
+  const selectedMissionRecord = useMemo(() => {
+    return missions.find((mission) => mission.missionId === selectedMissionId) || null;
+  }, [missions, selectedMissionId]);
+
+  useEffect(() => {
+    if (!selectedMissionId) {
+      return undefined;
+    }
+
+    fetchMissionLogs(selectedMissionId);
+
+    if (!selectedMissionRecord || TERMINAL_STATUSES.has(selectedMissionRecord.status)) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      fetchMissionLogs(selectedMissionId, { silent: true });
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [selectedMissionId, selectedMissionRecord]);
+
+  const missionRows = useMemo(() => {
+    return missions.map((mission) => {
+      const robot = robotsById[mission.robotId];
+      const plan = plansByName[mission.planName];
+      const logs = missionLogsById[mission.missionId] || [];
+      const isTerminal = TERMINAL_STATUSES.has(mission.status);
+
+      return {
+        id: mission.missionId,
+        missionId: mission.missionId,
+        name: `${mission.planName} - ${getRobotLabel(robot || { name: mission.robotId })}`,
+        robot: getRobotLabel(robot || { name: mission.robotId }),
+        robotId: mission.robotId,
+        poiPlanName: mission.planName,
+        mapName: mission.mapName,
+        poiCount: plan?.poisCount || 0,
+        status: mission.status,
+        result: getResultText(mission.status, logs),
+        resultTone: getResultTone(mission.status),
+        startTime: formatDateTime(mission.createdAt),
+        endTime: isTerminal ? formatDateTime(mission.updatedAt) : '-',
+        duration: formatDuration(
+          mission.createdAt,
+          isTerminal ? mission.updatedAt : null
+        ),
+        coverage: getCoverageText(mission.status, plan?.poisCount || 0, logs),
+        description: `Mission executee avec le plan "${mission.planName}" sur la carte "${mission.mapName}".`,
+        createdAt: mission.createdAt,
+        updatedAt: mission.updatedAt,
+        logs,
+      };
+    });
+  }, [missions, robotsById, plansByName, missionLogsById]);
+
+  const selectedMission = useMemo(() => {
+    return missionRows.find((mission) => mission.missionId === selectedMissionId) || null;
+  }, [missionRows, selectedMissionId]);
+
+  const selectedMissionLogs = selectedMission
+    ? missionLogsById[selectedMission.missionId] || []
+    : [];
+
   const filteredMissions = useMemo(() => {
-    if (filterStatus === 'All') return missions;
-    return missions.filter((mission) => mission.status === filterStatus);
-  }, [missions, filterStatus]);
+    if (filterStatus === 'All') {
+      return missionRows;
+    }
+
+    return missionRows.filter((mission) => mission.status === filterStatus);
+  }, [filterStatus, missionRows]);
+
+  const selectedPlan = useMemo(() => {
+    return poiMaps.find((plan) => plan.name === missionForm.poiPlanName) || null;
+  }, [poiMaps, missionForm.poiPlanName]);
+
+  const canLaunchMission =
+    missionForm.robotId && missionForm.robotName && missionForm.poiPlanName;
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -94,7 +441,9 @@ export default function Missions() {
   };
 
   const getStatusLabel = (status) => {
-    if (language !== 'en') return status;
+    if (language !== 'en') {
+      return status;
+    }
 
     switch (status) {
       case 'Pending':
@@ -108,24 +457,6 @@ export default function Missions() {
       default:
         return status;
     }
-  };
-
-  const getResultLabel = (result) => {
-    if (language !== 'en') return result;
-    if (result.includes('Succes')) return 'Success';
-    if (result.includes('En cours')) return 'Running';
-    if (result.includes('Echec')) return 'Failed - Manual stop';
-    if (result.includes('Attente')) return 'Waiting to start';
-    return result;
-  };
-
-  const getResultColor = (result) => {
-    if (!result) return '';
-    if (result.includes('Succès')) return 'result-success';
-    if (result.includes('cours')) return 'result-running';
-    if (result.includes('Échec')) return 'result-failed';
-    if (result.includes('Attente')) return 'result-pending';
-    return '';
   };
 
   const getStatusIcon = (status) => {
@@ -143,62 +474,15 @@ export default function Missions() {
     }
   };
 
-  const selectedPlan = useMemo(() => {
-    return poiMaps.find((plan) => plan.name === missionForm.poiPlanName) || null;
-  }, [poiMaps, missionForm.poiPlanName]);
-
-  const canCreateMission =
-    missionForm.robotId &&
-    missionForm.robotName &&
-    missionForm.poiPlanName;
-
-  const formatNow = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const h = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    return `${y}-${m}-${d} ${h}:${min}`;
-  };
-
-  const handleCreateMission = () => {
-    if (!canCreateMission) return;
-
-    const missionName = `${missionForm.poiPlanName} - ${missionForm.robotName}`;
-
-    const newMission = {
-      id: crypto.randomUUID(),
-      name: missionName,
-      robot: missionForm.robotName,
-      robotId: missionForm.robotId,
-      poiPlanName: missionForm.poiPlanName,
-      mapName: selectedPlan?.mapName || 'N/A',
-      poiCount: selectedPlan?.poisCount || 0,
-      status: 'Pending',
-      result: 'Attente de lancement',
-      startTime: null,
-      endTime: null,
-      duration: '-',
-      coverage: '0%',
-      description: `Mission créée à partir du plan "${missionForm.poiPlanName}" sur la carte "${selectedPlan?.mapName || 'N/A'}".`,
-    };
-
-    setMissions((prev) => [newMission, ...prev]);
-    setSelectedMission(newMission);
-  };
-
-const handleLaunchMission = async (mission) => {
-  try {
+  const launchMission = async ({ robotId, planName }) => {
     const response = await fetch('/api/start_mission', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        robotId: mission.robotId,
-        missionId: mission.id,
-        planName: mission.poiPlanName,
+        robotId,
+        planName,
       }),
     });
 
@@ -208,127 +492,133 @@ const handleLaunchMission = async (mission) => {
       throw new Error(data.error || 'Erreur lors du lancement de la mission');
     }
 
-    const updatedMission = {
-      ...mission,
-      status: 'Running',
-      result: 'En cours',
-      startTime: formatNow(),
-      endTime: null,
-      duration: '0 min',
-      coverage: mission.coverage === '0%' ? '5%' : mission.coverage,
-    };
+    return data;
+  };
 
-    setMissions((prev) =>
-      prev.map((m) => (m.id === mission.id ? updatedMission : m))
-    );
-
-    if (selectedMission?.id === mission.id) {
-      setSelectedMission(updatedMission);
+  const handleLaunchMission = async () => {
+    if (!canLaunchMission) {
+      return;
     }
-  } catch (error) {
-    console.error('Erreur lancement mission:', error);
-    alert('Le lancement de la mission a échoué.');
-  }
-};
 
-  const handleStopMission = (mission) => {
-    const updatedMission = {
-      ...mission,
-      status: 'Failed',
-      result: 'Échec - Arrêt manuel',
-      endTime: formatNow(),
-    };
+    try {
+      setIsSubmittingMission(true);
+      setErrorMessage('');
+      setFormMessage('');
 
-    setMissions((prev) =>
-      prev.map((m) => (m.id === mission.id ? updatedMission : m))
-    );
+      const data = await launchMission({
+        robotId: missionForm.robotId,
+        planName: missionForm.poiPlanName,
+      });
 
-    if (selectedMission?.id === mission.id) {
-      setSelectedMission(updatedMission);
+      await fetchMissions();
+
+      if (data.missionPreview?.missionId) {
+        setSelectedMissionId(data.missionPreview.missionId);
+      }
+
+      setFormMessage(
+        `Mission "${data.missionPreview?.missionId || missionForm.poiPlanName}" envoyee au robot.`
+      );
+    } catch (error) {
+      console.error('Erreur lancement mission:', error);
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmittingMission(false);
     }
   };
 
-  const handleCompleteMission = (mission) => {
-    const updatedMission = {
-      ...mission,
-      status: 'Completed',
-      result: 'Succès',
-      endTime: formatNow(),
-      duration: mission.duration === '-' || mission.duration === '0 min' ? '12 min' : mission.duration,
-      coverage: '100%',
-    };
+  const handleRetryMission = async (mission) => {
+    try {
+      setIsSubmittingMission(true);
+      setErrorMessage('');
+      setFormMessage('');
 
-    setMissions((prev) =>
-      prev.map((m) => (m.id === mission.id ? updatedMission : m))
-    );
+      const data = await launchMission({
+        robotId: mission.robotId,
+        planName: mission.poiPlanName,
+      });
 
-    if (selectedMission?.id === mission.id) {
-      setSelectedMission(updatedMission);
+      await fetchMissions();
+
+      if (data.missionPreview?.missionId) {
+        setSelectedMissionId(data.missionPreview.missionId);
+      }
+
+      setFormMessage(
+        `Nouvelle execution lancee pour le plan "${mission.poiPlanName}".`
+      );
+    } catch (error) {
+      console.error('Erreur relance mission:', error);
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmittingMission(false);
     }
   };
 
-  const handleRetryMission = (mission) => {
-    const updatedMission = {
-      ...mission,
-      status: 'Running',
-      result: 'En cours',
-      startTime: formatNow(),
-      endTime: null,
-      duration: '0 min',
-      coverage: '5%',
-    };
+  const handleExportMission = (mission) => {
+    const logs = missionLogsById[mission.missionId] || [];
+    const reportLines = [
+      `Mission ID,${mission.missionId}`,
+      `Robot,${mission.robotId}`,
+      `Plan,${mission.poiPlanName}`,
+      `Map,${mission.mapName}`,
+      `Status,${mission.status}`,
+      `Start,${mission.startTime}`,
+      `End,${mission.endTime}`,
+      `Duration,${mission.duration}`,
+      `Coverage,${mission.coverage}`,
+      '',
+      'Logs',
+      'Timestamp,Level,Message',
+      ...logs.map(
+        (log) =>
+          `${log.timestamp},${log.level || 'info'},"${String(log.message || '').replace(/"/g, '""')}"`
+      ),
+    ];
 
-    setMissions((prev) =>
-      prev.map((m) => (m.id === mission.id ? updatedMission : m))
-    );
-
-    if (selectedMission?.id === mission.id) {
-      setSelectedMission(updatedMission);
-    }
-  };
-
-  const handleDeleteMission = (id) => {
-    setMissions((prev) => prev.filter((mission) => mission.id !== id));
-
-    if (selectedMission?.id === id) {
-      setSelectedMission(null);
-    }
+    const blob = new Blob([reportLines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${mission.missionId}.csv`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
     <DashboardLayout>
-      <Card title={language === 'en' ? 'Create a mission' : 'Creer une mission'} span={1}>
+      <Card title={language === 'en' ? 'Launch a mission' : 'Lancer une mission'} span={1}>
         <div className="mission-create-panel">
           <div className="form-group">
             <label>{language === 'en' ? 'Robot' : 'Robot'}</label>
             <select
               value={missionForm.robotId}
-              onChange={(e) => {
-                const selected = robots.find(
-                  (robot) =>
-                    (robot.id || robot.robotId || robot.name || '') === e.target.value
+              onChange={(event) => {
+                const selectedRobot = robots.find(
+                  (robot) => getRobotKey(robot) === event.target.value
                 );
 
-                setMissionForm((prev) => ({
-                  ...prev,
-                  robotId: e.target.value,
-                  robotName: selected?.name || selected?.id || selected?.robotId || '',
+                setMissionForm((previousForm) => ({
+                  ...previousForm,
+                  robotId: event.target.value,
+                  robotName: selectedRobot ? getRobotLabel(selectedRobot) : '',
                 }));
               }}
             >
               {robots.length > 0 ? (
                 robots.map((robot, index) => {
-                  const robotValue = robot.id || robot.robotId || robot.name || `robot-${index}`;
-                  const robotLabel = robot.name || robot.id || robot.robotId || `Robot ${index + 1}`;
+                  const robotValue = getRobotKey(robot) || `robot-${index}`;
 
                   return (
                     <option key={robotValue} value={robotValue}>
-                      {robotLabel}
+                      {getRobotLabel(robot)}
                     </option>
                   );
                 })
               ) : (
-                <option value="">{language === 'en' ? 'No robot available' : 'Aucun robot disponible'}</option>
+                <option value="">
+                  {language === 'en' ? 'No robot available' : 'Aucun robot disponible'}
+                </option>
               )}
             </select>
           </div>
@@ -337,10 +627,10 @@ const handleLaunchMission = async (mission) => {
             <label>{language === 'en' ? 'POI Plan' : 'Plan POI'}</label>
             <select
               value={missionForm.poiPlanName}
-              onChange={(e) =>
-                setMissionForm((prev) => ({
-                  ...prev,
-                  poiPlanName: e.target.value,
+              onChange={(event) =>
+                setMissionForm((previousForm) => ({
+                  ...previousForm,
+                  poiPlanName: event.target.value,
                 }))
               }
             >
@@ -351,7 +641,11 @@ const handleLaunchMission = async (mission) => {
                   </option>
                 ))
               ) : (
-                <option value="">{language === 'en' ? 'No POI plan available' : 'Aucun plan POI disponible'}</option>
+                <option value="">
+                  {language === 'en'
+                    ? 'No POI plan available'
+                    : 'Aucun plan POI disponible'}
+                </option>
               )}
             </select>
           </div>
@@ -368,25 +662,34 @@ const handleLaunchMission = async (mission) => {
               </div>
               <div className="summary-row">
                 <span>{language === 'en' ? 'Last update' : 'Derniere mise a jour'}</span>
-                <strong>{new Date(selectedPlan.updatedAt).toLocaleString()}</strong>
+                <strong>{formatDateTime(selectedPlan.updatedAt)}</strong>
               </div>
             </div>
           )}
 
+          {formMessage ? <div className="mission-inline-note">{formMessage}</div> : null}
+          {errorMessage ? <div className="mission-inline-error">{errorMessage}</div> : null}
+
           <button
             className="primary-mission-btn"
-            onClick={handleCreateMission}
-            disabled={!canCreateMission}
+            onClick={handleLaunchMission}
+            disabled={!canLaunchMission || isSubmittingMission}
           >
-            <PlusCircle size={16} />
-            {language === 'en' ? 'Create mission' : 'Creer la mission'}
+            <Play size={16} />
+            {isSubmittingMission
+              ? language === 'en'
+                ? 'Launching...'
+                : 'Lancement...'
+              : language === 'en'
+                ? 'Launch mission'
+                : 'Lancer la mission'}
           </button>
         </div>
       </Card>
 
       <Card title={language === 'en' ? 'Missions' : 'Missions'} span={2}>
         <div className="missions-filters">
-          {['All', 'Pending', 'Running', 'Completed', 'Failed'].map((status) => (
+          {STATUS_FILTERS.map((status) => (
             <button
               key={status}
               className={`filter-btn ${filterStatus === status ? 'active' : ''}`}
@@ -407,15 +710,19 @@ const handleLaunchMission = async (mission) => {
             <div className="col-actions">Actions</div>
           </div>
 
-          {filteredMissions.length > 0 ? (
+          {isInitialLoading ? (
+            <div className="empty-missions">
+              {language === 'en' ? 'Loading missions...' : 'Chargement des missions...'}
+            </div>
+          ) : filteredMissions.length > 0 ? (
             filteredMissions.map((mission) => (
               <div
-                key={mission.id}
-                className={`mission-row ${selectedMission?.id === mission.id ? 'selected' : ''}`}
-                onClick={() => setSelectedMission(mission)}
+                key={mission.missionId}
+                className={`mission-row ${selectedMission?.missionId === mission.missionId ? 'selected' : ''}`}
+                onClick={() => setSelectedMissionId(mission.missionId)}
               >
                 <div className="col-name">
-                  <strong>{mission.name}</strong>
+                  <strong>{mission.missionId}</strong>
                 </div>
 
                 <div className="col-robot">
@@ -449,77 +756,51 @@ const handleLaunchMission = async (mission) => {
                 <div className="col-actions">
                   <button
                     className="action-icon-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMission(mission);
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedMissionId(mission.missionId);
                     }}
                     title={language === 'en' ? 'View details' : 'Voir les details'}
                   >
                     <Info size={16} />
                   </button>
 
-                  {mission.status === 'Pending' && (
-                    <button
-                      className="action-icon-btn launch"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLaunchMission(mission);
-                      }}
-                      title={language === 'en' ? 'Launch' : 'Lancer'}
-                    >
-                      <Play size={16} />
-                    </button>
-                  )}
-
-                  {mission.status === 'Running' && (
-                    <button
-                      className="action-icon-btn stop"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStopMission(mission);
-                      }}
-                      title={language === 'en' ? 'Stop' : 'Arreter'}
-                    >
-                      <Square size={16} />
-                    </button>
-                  )}
-
-                  {mission.status === 'Failed' && (
+                  {mission.status === 'Failed' ? (
                     <button
                       className="action-icon-btn retry"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={(event) => {
+                        event.stopPropagation();
                         handleRetryMission(mission);
                       }}
                       title={language === 'en' ? 'Retry' : 'Relancer'}
                     >
                       <RotateCcw size={16} />
                     </button>
-                  )}
-                  <button
-                    className="action-icon-btn delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteMission(mission.id);
-                    }}
-                    title={language === 'en' ? 'Delete' : 'Supprimer'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  ) : null}
                 </div>
               </div>
             ))
           ) : (
-            <div className="empty-missions">{language === 'en' ? 'No mission found' : 'Aucune mission trouvee'}</div>
+            <div className="empty-missions">
+              {language === 'en' ? 'No mission found' : 'Aucune mission trouvee'}
+            </div>
           )}
         </div>
       </Card>
 
-      {selectedMission && (
-        <Card title={`${language === 'en' ? 'Details' : 'Details'} : ${selectedMission.name}`} span={1}>
+      {selectedMission ? (
+        <Card
+          title={`${language === 'en' ? 'Details' : 'Details'} : ${selectedMission.missionId}`}
+          span={1}
+        >
           <div className="mission-details">
             <div className="detail-section">
               <h4>{language === 'en' ? 'General information' : 'Informations generales'}</h4>
+
+              <div className="detail-row">
+                <span>Mission ID</span>
+                <strong>{selectedMission.missionId}</strong>
+              </div>
 
               <div className="detail-row">
                 <span>{language === 'en' ? 'Assigned robot' : 'Robot assigne'}</span>
@@ -551,8 +832,8 @@ const handleLaunchMission = async (mission) => {
 
               <div className="detail-row">
                 <span>{language === 'en' ? 'Result' : 'Resultat'}</span>
-                <span className={`result-badge ${getResultColor(selectedMission.result)}`}>
-                  {getResultLabel(selectedMission.result)}
+                <span className={`result-badge ${selectedMission.resultTone}`}>
+                  {selectedMission.result}
                 </span>
               </div>
             </div>
@@ -562,12 +843,12 @@ const handleLaunchMission = async (mission) => {
 
               <div className="detail-row">
                 <span>{language === 'en' ? 'Start' : 'Debut'}</span>
-                <strong>{selectedMission.startTime || '-'}</strong>
+                <strong>{selectedMission.startTime}</strong>
               </div>
 
               <div className="detail-row">
                 <span>{language === 'en' ? 'End' : 'Fin'}</span>
-                <strong>{selectedMission.endTime || '-'}</strong>
+                <strong>{selectedMission.endTime}</strong>
               </div>
 
               <div className="detail-row">
@@ -584,7 +865,7 @@ const handleLaunchMission = async (mission) => {
                 <div className="progress-bar">
                   <div
                     className="progress-fill"
-                    style={{ width: `${selectedMission.coverage}` }}
+                    style={{ width: selectedMission.coverage }}
                   ></div>
                 </div>
               </div>
@@ -599,38 +880,39 @@ const handleLaunchMission = async (mission) => {
               <p className="description-text">{selectedMission.description}</p>
             </div>
 
+            <div className="detail-section">
+              <h4>{language === 'en' ? 'Mission logs' : 'Logs mission'}</h4>
+
+              {isLogsLoading && selectedMissionLogs.length === 0 ? (
+                <div className="mission-logs-empty">
+                  {language === 'en' ? 'Loading logs...' : 'Chargement des logs...'}
+                </div>
+              ) : selectedMissionLogs.length > 0 ? (
+                <div className="mission-logs-list">
+                  {selectedMissionLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className={`mission-log-item ${getLogToneClass(log.level)}`}
+                    >
+                      <div className="mission-log-meta">
+                        <span className="mission-log-level">{log.level || 'info'}</span>
+                        <span className="mission-log-time">
+                          {formatDateTime(log.timestamp)}
+                        </span>
+                      </div>
+                      <div className="mission-log-message">{log.message}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mission-logs-empty">
+                  {language === 'en' ? 'No log available yet' : 'Aucun log disponible pour le moment'}
+                </div>
+              )}
+            </div>
+
             <div className="detail-actions">
-              {selectedMission.status === 'Pending' && (
-                <button
-                  className="detail-btn launch-btn"
-                  onClick={() => handleLaunchMission(selectedMission)}
-                >
-                  <Play size={16} />
-                  {language === 'en' ? 'Launch mission' : 'Lancer la mission'}
-                </button>
-              )}
-
-              {selectedMission.status === 'Running' && (
-                <>
-                  <button
-                    className="detail-btn stop-btn"
-                    onClick={() => handleStopMission(selectedMission)}
-                  >
-                    <Square size={16} />
-                    {language === 'en' ? 'Stop' : 'Arreter'}
-                  </button>
-
-                  <button
-                    className="detail-btn complete-btn"
-                    onClick={() => handleCompleteMission(selectedMission)}
-                  >
-                    <CheckCircle2 size={16} />
-                    {language === 'en' ? 'Mark as completed' : 'Marquer comme terminee'}
-                  </button>
-                </>
-              )}
-
-              {selectedMission.status === 'Failed' && (
+              {selectedMission.status === 'Failed' ? (
                 <button
                   className="detail-btn retry-btn"
                   onClick={() => handleRetryMission(selectedMission)}
@@ -638,16 +920,19 @@ const handleLaunchMission = async (mission) => {
                   <RotateCcw size={16} />
                   {language === 'en' ? 'Retry mission' : 'Relancer la mission'}
                 </button>
-              )}
+              ) : null}
 
-              <button className="detail-btn export-btn">
+              <button
+                className="detail-btn export-btn"
+                onClick={() => handleExportMission(selectedMission)}
+              >
                 <Download size={16} />
                 {language === 'en' ? 'Export report' : 'Exporter le rapport'}
               </button>
             </div>
           </div>
         </Card>
-      )}
+      ) : null}
     </DashboardLayout>
   );
 }

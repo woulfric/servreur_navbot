@@ -7,25 +7,48 @@ import { useI18n } from '../i18n/LanguageContext';
 import './robots.css';
 
 export default function Robots() {
-  const { activeRobots, selectedRobotId, setSelectedRobotId } = useContext(RobotContext);
+  const { robots, selectedRobotId, setSelectedRobotId } = useContext(RobotContext);
   const { language } = useI18n();
 
-  // Adaptation des donnees brutes du backend pour l'interface utilisateur
-  // Les champs batterie et localisation seront mis a jour plus tard via la telemetrie
-  const formattedRobots = activeRobots.map(robot => ({
+  const formatRobotType = (type) => {
+    const normalizedType = String(type || 'unknown').toLowerCase();
+
+    if (normalizedType === 'tb3') {
+      return 'TurtleBot 3';
+    }
+
+    if (normalizedType === 'tb4') {
+      return 'TurtleBot 4';
+    }
+
+    return language === 'en' ? 'Unknown robot' : 'Robot inconnu';
+  };
+
+  const formatCreatedAt = (value) => {
+    if (!value) {
+      return language === 'en' ? 'Unknown date' : 'Date inconnue';
+    }
+
+    return new Date(value).toLocaleDateString(language === 'en' ? 'en-GB' : 'fr-FR');
+  };
+
+  const formattedRobots = robots.map((robot) => ({
     id: robot.id,
-    name: robot.id, // L'ID MQTT sert de nom par defaut
+    name: robot.name || robot.robotId || robot.id,
+    typeLabel: formatRobotType(robot.type),
     status: robot.status === 'online' ? 'Online' : 'Offline',
-    battery: '--',
-    location: language === 'en' ? 'Waiting' : 'En attente',
-    lastSeen: language === 'en' ? 'Just now' : 'A l\'instant'
+    source: robot.status === 'online'
+      ? (language === 'en' ? 'Broker live' : 'Broker en direct')
+      : 'MongoDB',
+    lastSeen: robot.status === 'online'
+      ? (language === 'en' ? 'Now' : 'Maintenant')
+      : (language === 'en' ? 'No recent signal' : 'Aucun signal recent'),
+    createdAt: formatCreatedAt(robot.createdAt),
   }));
 
   const onlineRobots = formattedRobots.filter(r => r.status === 'Online');
-  const idleRobots = formattedRobots.filter(r => r.status === 'Idle');
   const offlineRobots = formattedRobots.filter(r => r.status === 'Offline');
 
-  // Recuperation des donnees du robot actuellement selectionne
   const selectedRobot = formattedRobots.find(r => r.id === selectedRobotId);
 
   const RobotRow = ({ robot }) => (
@@ -38,24 +61,13 @@ export default function Robots() {
         <div className={`status-indicator status-${robot.status.toLowerCase()}`}></div>
         <strong>{robot.name}</strong>
       </div>
-      <div className="robot-battery">
-        <div className="battery-bar">
-          <div
-            className="battery-fill"
-            style={{
-              width: robot.battery === '--' ? '0%' : `${robot.battery}%`,
-              backgroundColor: '#9ca3af', // Gris par defaut sans donnees
-            }}
-          ></div>
-        </div>
-        <span>{robot.battery}%</span>
-      </div>
-      <div className="robot-location">{robot.location}</div>
+      <div className="robot-type">{robot.typeLabel}</div>
+      <div className="robot-source">{robot.source}</div>
       <div className="robot-lastseen">{robot.lastSeen}</div>
-      <button 
-        className="robot-action-btn" 
-        onClick={(e) => { 
-          e.stopPropagation(); 
+      <button
+        className="robot-action-btn"
+        onClick={(e) => {
+          e.stopPropagation();
           setSelectedRobotId(robot.id);
         }}
       >
@@ -83,19 +95,6 @@ export default function Robots() {
           </div>
 
           <div className="robots-section">
-            <h3 className="section-title idle">
-              <Circle size={16} fill="#eab308" color="#eab308" /> {language === 'en' ? 'Idle' : 'En attente'} ({idleRobots.length})
-            </h3>
-            <div className="robots-group">
-              {idleRobots.length > 0 ? (
-                idleRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
-              ) : (
-                <p className="empty-state">{language === 'en' ? 'No idle robot' : 'Aucun robot en attente'}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="robots-section">
             <h3 className="section-title offline">
               <Circle size={16} fill="#ef4444" color="#ef4444" /> {language === 'en' ? 'Offline' : 'Hors ligne'} ({offlineRobots.length})
             </h3>
@@ -103,7 +102,7 @@ export default function Robots() {
               {offlineRobots.length > 0 ? (
                 offlineRobots.map(robot => <RobotRow key={robot.id} robot={robot} />)
               ) : (
-                <p className="empty-state">{language === 'en' ? 'No history' : 'Historique vide'}</p>
+                <p className="empty-state">{language === 'en' ? 'No robot saved in database' : 'Aucun robot enregistre en base'}</p>
               )}
             </div>
           </div>
@@ -121,16 +120,20 @@ export default function Robots() {
               </strong>
             </div>
             <div className="detail-row">
-              <span>{language === 'en' ? 'Battery' : 'Batterie'}</span>
-              <strong>{selectedRobot.battery}</strong>
+              <span>{language === 'en' ? 'Type' : 'Type'}</span>
+              <strong>{selectedRobot.typeLabel}</strong>
             </div>
             <div className="detail-row">
-              <span>{language === 'en' ? 'Location' : 'Localisation'}</span>
-              <strong>{selectedRobot.location}</strong>
+              <span>{language === 'en' ? 'Source' : 'Source'}</span>
+              <strong>{selectedRobot.source}</strong>
             </div>
             <div className="detail-row">
               <span>{language === 'en' ? 'Last seen' : 'Dernier contact'}</span>
               <strong>{selectedRobot.lastSeen}</strong>
+            </div>
+            <div className="detail-row">
+              <span>{language === 'en' ? 'Saved on' : 'Enregistre le'}</span>
+              <strong>{selectedRobot.createdAt}</strong>
             </div>
           </div>
         </Card>

@@ -43,7 +43,7 @@
 
 .robot-row {
   display: grid;
-  grid-template-columns: 1.5fr 1.5fr 1.5fr 1.2fr 1fr;
+  grid-template-columns: 1.8fr 1.2fr 1.2fr 1.2fr auto;
   gap: 16px;
   align-items: center;
   padding: 12px 14px;
@@ -114,45 +114,14 @@
   text-overflow: ellipsis;
 }
 
-.robot-battery {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.battery-bar {
-  flex: 1;
-  height: 6px;
-  background: #e8ecf1;
-  border-radius: 3px;
-  overflow: hidden;
-  min-width: 60px;
-}
-
-.battery-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.robot-battery span {
-  font-size: 12px;
-  color: #718096;
-  min-width: 35px;
-  text-align: right;
-}
-
-.robot-location {
+.robot-type,
+.robot-source,
+.robot-lastseen {
   font-size: 12px;
   color: #718096;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.robot-lastseen {
-  font-size: 12px;
-  color: #718096;
 }
 
 .robot-action-btn {
@@ -255,8 +224,19 @@
 /* Large Desktop (1025px - 1440px) */
 @media (max-width: 1400px) {
   .robot-row {
-    grid-template-columns: 1.5fr 1.5fr 1.5fr 1.2fr 1fr;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr auto;
     gap: 12px;
+  }
+}
+
+@media (max-width: 980px) {
+  .robot-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .robot-action-btn {
+    width: 100%;
   }
 }
 
