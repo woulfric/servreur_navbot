@@ -370,6 +370,11 @@ export default function POI() {
                 <span>
                   Origine : [{mapMeta.origin[0]}, {mapMeta.origin[1]}, {mapMeta.origin[2]}]
                 </span>
+                <span>
+                  Pose initiale : {selectedMap?.initialPose
+                    ? `[${selectedMap.initialPose.x.toFixed(2)}, ${selectedMap.initialPose.y.toFixed(2)}, ${selectedMap.initialPose.yaw.toFixed(2)}]`
+                    : 'non définie'}
+                </span>
               </div>
             )}
 
@@ -378,6 +383,7 @@ export default function POI() {
                 mapName={selectedMap.name}
                 pois={currentPois}
                 selectedPoiId={selectedPoiId}
+                initialPose={selectedMap.initialPose}
                 onMapClick={handleMapClick}
                 onMetaLoaded={setMapMeta}
                 zoom={zoom}

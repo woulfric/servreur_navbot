@@ -17,6 +17,8 @@ router.post('/start_slam', robotController.startSlam);
 router.post('/stop_slam', robotController.stopSlam);
 router.post('/start_bridge', robotController.startBridge);
 router.post('/stop_bridge', robotController.stopBridge);
+router.post('/start_video_stream', robotController.startVideoStream);
+router.post('/stop_video_stream', robotController.stopVideoStream);
 
 router.post('/poi-maps', robotController.savePoiMap);
 router.get('/poi-maps', robotController.listPoiMaps);
@@ -24,6 +26,8 @@ router.get('/poi-maps/:mapName', robotController.getPoiMap);
 
 router.post('/start_mission', robotController.startMission);
 router.get('/missions', robotController.listMissions);
+router.get('/missions/user/:uid', robotController.listMissionsForMobileUser);
+router.get('/missions/android/robot/:robotId', robotController.listMissionsForMobileRobot);
 router.get('/missions/:missionId/logs', robotController.getMissionLogs);
 
 module.exports = router;

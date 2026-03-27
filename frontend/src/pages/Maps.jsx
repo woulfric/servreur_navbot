@@ -81,7 +81,7 @@ export default function Maps() {
       {selectedMap && (
         <Card title={`${language === 'en' ? 'Preview' : 'Apercu'}: ${selectedMap.name}`} span={2}>
           <div className="map-preview">
-            <MapCanvas mapName={selectedMap.name} />
+            <MapCanvas mapName={selectedMap.name} initialPose={selectedMap.initialPose} />
           </div>
 
           <div className="map-details">
@@ -100,6 +100,14 @@ export default function Maps() {
             <div className="detail-item">
               <span>{language === 'en' ? 'Updated' : 'Modifiee'}</span>
               <strong>{selectedMap.lastModified}</strong>
+            </div>
+            <div className="detail-item">
+              <span>{language === 'en' ? 'Initial pose' : 'Pose initiale'}</span>
+              <strong>
+                {selectedMap.initialPose
+                  ? `x=${selectedMap.initialPose.x.toFixed(2)} y=${selectedMap.initialPose.y.toFixed(2)}`
+                  : (language === 'en' ? 'Not defined' : 'Non definie')}
+              </strong>
             </div>
           </div>
         </Card>

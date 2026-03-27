@@ -57,3 +57,18 @@ roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rvi
 
 
 Ip Broker : 172.20.10.4
+
+
+
+
+
+
+
+
+lancer mongo : sudo mongod --config /etc/mongod.conf --fork
+sudo pkill mongod
+
+backend firebase : 
+
+cd /home/woulfric/serveur_navbot/app_mobile/robotbackend
+./mvnw spring-boot:run

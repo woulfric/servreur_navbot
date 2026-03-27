@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef, useContext } from 'react';
 import Card from '../components/common/Card';
+import MapCanvas from '../components/MapCanvas';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { RobotContext } from '../context/RobotContext';
 import { useI18n } from '../i18n/LanguageContext';
 import { getRosbridgeUrl } from '../utils/rosbridge';
 import './telecommande.css';
+
+const DEFAULT_CAMERA_TOPIC = '/oakd/rgb/preview/image_raw';
+const DEFAULT_CAMERA_HOST = '172.20.10.3';
+const DEFAULT_CAMERA_PORT = '8090';
+const DEFAULT_CAMERA_QOS_PROFILE = 'sensor_data';
+const VIDEO_STARTUP_DELAY_MS = 1200;
 
 export default function Telecommande() {
   const { selectedRobotId, isRobotOnline } = useContext(RobotContext);
@@ -17,44 +24,30 @@ export default function Telecommande() {
   const [linearSpeed, setLinearSpeed] = useState(0.2);
   const [angularSpeed, setAngularSpeed] = useState(0.8);
   const [isEmergency, setIsEmergency] = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(false);
+  const [isVideoBusy, setIsVideoBusy] = useState(false);
+  const [videoViewerNonce, setVideoViewerNonce] = useState(0);
+  const [videoError, setVideoError] = useState('');
+  const [maps, setMaps] = useState([]);
+  const [selectedMapId, setSelectedMapId] = useState('');
+  const [isMapsLoading, setIsMapsLoading] = useState(false);
 
   const moveInterval = useRef(null);
-  const mapContainerRef = useRef(null);
   const rosRef = useRef(null);
-  const viewerRef = useRef(null);
 
-  const robotIpCam = window.location.hostname;
-  const cameraTopic = '/oakd/rgb/preview/image_raw';
-  const videoUrl = `http://${robotIpCam}:8080/stream?topic=${cameraTopic}&type=mjpeg&quality=30`;
+  const cameraTopic = DEFAULT_CAMERA_TOPIC;
+  const videoStreamUrl = selectedRobotId && isVideoEnabled
+    ? `http://${DEFAULT_CAMERA_HOST}:${DEFAULT_CAMERA_PORT}/stream?topic=${cameraTopic}&type=mjpeg&quality=65&qos_profile=${DEFAULT_CAMERA_QOS_PROFILE}&t=${videoViewerNonce}`
+    : '';
+  const selectedMap = maps.find((map) => map.id === selectedMapId) || null;
 
-  const setupMapViewer = (ros) => {
-    if (!mapContainerRef.current) return;
-    mapContainerRef.current.innerHTML = '';
+  useEffect(() => {
+    setIsVideoEnabled(false);
+    setVideoViewerNonce(0);
+    setVideoError('');
+  }, [selectedRobotId]);
 
-    viewerRef.current = new window.ROS2D.Viewer({
-      divID: mapContainerRef.current.id,
-      width: mapContainerRef.current.offsetWidth || 800,
-      height: 450,
-      background: '#1a1a1a'
-    });
-
-    const gridClient = new window.ROS2D.OccupancyGridClient({
-      ros: ros,
-      rootObject: viewerRef.current.scene,
-      continuous: false
-    });
-
-    gridClient.on('change', () => {
-      viewerRef.current.scaleToDimensions(gridClient.currentGrid.width, gridClient.currentGrid.height);
-      viewerRef.current.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
-    });
-
-    const robotMarker = new window.ROS2D.NavigationArrow({
-      size: 25, strokeSize: 1, fillColor: window.createjs.Graphics.getRGB(231, 76, 60, 0.9), pulse: false
-    });
-    robotMarker.visible = false;
-    viewerRef.current.scene.addChild(robotMarker);
-
+  const setupOdomListener = (ros) => {
     const odomListener = new window.ROSLIB.Topic({
       ros: ros,
       name: '/odom',
@@ -62,17 +55,6 @@ export default function Telecommande() {
     });
 
     odomListener.subscribe((pose) => {
-      robotMarker.x = pose.pose.pose.position.x;
-      robotMarker.y = pose.pose.pose.position.y;
-
-      const q = pose.pose.pose.orientation;
-      const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-      const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-      const yaw = Math.atan2(siny_cosp, cosy_cosp);
-      
-      robotMarker.rotation = -yaw * (180.0 / Math.PI);
-      robotMarker.visible = true;
-
       setPosX(pose.pose.pose.position.x.toFixed(2));
       setPosY(pose.pose.pose.position.y.toFixed(2));
     });
@@ -81,7 +63,6 @@ export default function Telecommande() {
   };
 
   useEffect(() => {
-    let batteryListener = null;
     let odomListener = null;
 
     getRosbridgeUrl()
@@ -91,7 +72,7 @@ export default function Telecommande() {
 
         ros.on('connection', () => {
           setStatus('CONNECTED');
-          odomListener = setupMapViewer(ros);
+          odomListener = setupOdomListener(ros);
         });
 
         ros.on('error', () => {
@@ -107,6 +88,47 @@ export default function Telecommande() {
     return () => {
       if (odomListener) odomListener.unsubscribe();
       if (rosRef.current) rosRef.current.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMaps = async () => {
+      setIsMapsLoading(true);
+
+      try {
+        const response = await fetch('/api/maps');
+        const data = await response.json();
+
+        if (!cancelled) {
+          const nextMaps = Array.isArray(data.maps) ? data.maps : [];
+          setMaps(nextMaps);
+          setSelectedMapId((currentSelectedMapId) => {
+            if (currentSelectedMapId && nextMaps.some((map) => map.id === currentSelectedMapId)) {
+              return currentSelectedMapId;
+            }
+
+            return nextMaps[0]?.id || '';
+          });
+        }
+      } catch (error) {
+        console.error('Erreur chargement maps teleop:', error);
+        if (!cancelled) {
+          setMaps([]);
+          setSelectedMapId('');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMapsLoading(false);
+        }
+      }
+    };
+
+    loadMaps();
+
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -202,23 +224,162 @@ export default function Telecommande() {
     if (newState) stopMove();
   };
 
+  const startVideoStream = async () => {
+    if (!selectedRobotId) {
+      alert(t('common.selectRobot'));
+      return;
+    }
+
+    setIsVideoBusy(true);
+    setVideoError('');
+    setIsVideoEnabled(false);
+
+    try {
+      const response = await fetch('/api/start_video_stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robotId: selectedRobotId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lancement flux video');
+      }
+
+      setVideoViewerNonce(Date.now());
+      window.setTimeout(() => {
+        setIsVideoEnabled(true);
+      }, VIDEO_STARTUP_DELAY_MS);
+    } catch (error) {
+      console.error('Erreur lancement video:', error);
+      setVideoError('Impossible de lancer le flux video sur le robot.');
+    } finally {
+      setIsVideoBusy(false);
+    }
+  };
+
+  const stopVideoStream = async () => {
+    if (!selectedRobotId) {
+      alert(t('common.selectRobot'));
+      return;
+    }
+
+    setIsVideoBusy(true);
+    setIsVideoEnabled(false);
+    setVideoViewerNonce(0);
+    setVideoError('');
+
+    try {
+      const response = await fetch('/api/stop_video_stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robotId: selectedRobotId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur arret flux video');
+      }
+    } catch (error) {
+      console.error('Erreur arret video:', error);
+      setVideoError('Impossible d arreter le flux video sur le robot.');
+    } finally {
+      setIsVideoBusy(false);
+    }
+  };
+
+  const videoPlaceholderMessage = !selectedRobotId
+    ? t('common.selectRobot')
+    : videoError || 'Flux video desactive. Clique sur Activer flux pour demarrer le stream du robot.';
+  const mapPlaceholderMessage = isMapsLoading
+    ? 'Chargement des cartes...'
+    : 'Aucune carte disponible.';
+
   return (
     <DashboardLayout contentClassName="layout-content--split">
       <div className="teleop-page">
         
         <div className="teleop-col-left">
           <Card title="Live Camera Feed">
+            <div className="video-toolbar">
+              <div className="video-actions">
+                <button
+                  type="button"
+                  className="video-btn video-btn-primary"
+                  onClick={startVideoStream}
+                  disabled={!selectedRobotId || !isRobotOnline || isVideoBusy}
+                >
+                  {isVideoBusy ? 'Activation...' : 'Activer flux'}
+                </button>
+                <button
+                  type="button"
+                  className="video-btn video-btn-danger"
+                  onClick={stopVideoStream}
+                  disabled={!selectedRobotId || isVideoBusy}
+                >
+                  {isVideoBusy ? 'Arret...' : 'Desactiver flux'}
+                </button>
+              </div>
+            </div>
+
             <div className="video-container">
-              <img 
-                src={videoUrl} 
-                alt="Flux vidéo indisponible" 
-                onError={(e) => { e.target.style.display = 'none'; setTimeout(() => { e.target.src = videoUrl; e.target.style.display = 'block'; }, 2000); }}
-              />
+              {isVideoEnabled ? (
+                <img
+                  key={videoStreamUrl}
+                  src={videoStreamUrl}
+                  alt="Flux video robot"
+                  className="video-stream"
+                  onLoad={() => setVideoError('')}
+                  onError={() => setVideoError('Le flux video est actif mais le navigateur n a rien recu.')}
+                />
+              ) : (
+                <div className="video-placeholder">
+                  {videoPlaceholderMessage}
+                </div>
+              )}
             </div>
           </Card>
 
-          <Card title="Live Map">
-            <div id="ros-map-container" ref={mapContainerRef} className="map-container"></div>
+          <Card title="Map Preview">
+            <div className="map-toolbar">
+              <label className="map-select-label" htmlFor="teleop-map-select">
+                Carte
+              </label>
+              <select
+                id="teleop-map-select"
+                className="map-select"
+                value={selectedMapId}
+                onChange={(event) => setSelectedMapId(event.target.value)}
+                disabled={isMapsLoading || maps.length === 0}
+              >
+                {maps.length === 0 ? (
+                  <option value="">Aucune carte</option>
+                ) : (
+                  maps.map((map) => (
+                    <option key={map.id} value={map.id}>
+                      {map.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div className="map-preview-shell">
+              {selectedMap ? (
+                <MapCanvas
+                  mapName={selectedMap.name}
+                  initialPose={selectedMap.initialPose}
+                />
+              ) : (
+                <div className="video-placeholder">
+                  {mapPlaceholderMessage}
+                </div>
+              )}
+            </div>
+
+            {selectedMap?.initialPose ? (
+              <div className="map-caption">
+                Pose initiale: x={selectedMap.initialPose.x.toFixed(2)} y={selectedMap.initialPose.y.toFixed(2)}
+              </div>
+            ) : null}
           </Card>
         </div>
 

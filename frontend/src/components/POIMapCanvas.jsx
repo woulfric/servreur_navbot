@@ -85,6 +85,7 @@ export default function POIMapCanvas({
   mapName,
   pois = [],
   selectedPoiId = null,
+  initialPose = null,
   onMapClick,
   onMetaLoaded,
   zoom = 1,
@@ -160,6 +161,42 @@ export default function POIMapCanvas({
     ctx.clearRect(0, 0, width, height);
     ctx.putImageData(imageData, 0, 0);
 
+    if (initialPose) {
+      const px = (initialPose.x - meta.origin[0]) / meta.resolution;
+      const py = height - (initialPose.y - meta.origin[1]) / meta.resolution;
+
+      if (!Number.isNaN(px) && !Number.isNaN(py)) {
+        ctx.save();
+        ctx.strokeStyle = '#f97316';
+        ctx.fillStyle = '#f97316';
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(px - 10, py);
+        ctx.lineTo(px + 10, py);
+        ctx.moveTo(px, py - 10);
+        ctx.lineTo(px, py + 10);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(px, py, 14, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const yaw = Number(initialPose.yaw || 0);
+        const dirX = Math.cos(yaw) * 18;
+        const dirY = -Math.sin(yaw) * 18;
+
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + dirX, py + dirY);
+        ctx.stroke();
+
+        ctx.font = '12px Arial';
+        ctx.fillText('Start', px + 16, py - 14);
+        ctx.restore();
+      }
+    }
+
     pois.forEach((poi, index) => {
       const px = (poi.x - meta.origin[0]) / meta.resolution;
       const py = height - (poi.y - meta.origin[1]) / meta.resolution;
@@ -183,7 +220,7 @@ export default function POIMapCanvas({
       ctx.font = '12px Arial';
       ctx.fillText(`${index + 1}`, px + 10, py - 10);
     });
-  }, [mapData, pois, selectedPoiId]);
+  }, [initialPose, mapData, pois, selectedPoiId]);
 
   const handleClick = (event) => {
     if (!mapData || !onMapClick || !canvasRef.current) return;

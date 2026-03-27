@@ -197,6 +197,20 @@ const syncMapsFromDisk = async () => {
 const mapDocumentToResponse = (mapDocument) => {
   const yamlPath = path.join(mapsDir, `${mapDocument.mapName}.yaml`);
   const stats = fs.existsSync(yamlPath) ? fs.statSync(yamlPath) : null;
+  const initialPose =
+    mapDocument.initialPose &&
+    Number.isFinite(mapDocument.initialPose.x) &&
+    Number.isFinite(mapDocument.initialPose.y)
+      ? {
+          x: Number(mapDocument.initialPose.x),
+          y: Number(mapDocument.initialPose.y),
+          yaw: Number(mapDocument.initialPose.yaw || 0),
+          capturedAt: mapDocument.initialPose.capturedAt
+            ? toIsoDate(mapDocument.initialPose.capturedAt)
+            : null,
+          source: mapDocument.initialPose.source || 'slam_start',
+        }
+      : null;
 
   return {
     id: String(mapDocument._id),
@@ -208,6 +222,7 @@ const mapDocumentToResponse = (mapDocument) => {
     lastModified: toDisplayDate(stats ? stats.mtime : mapDocument.createdAt),
     robotCount: 0,
     pointsCount: 'N/A',
+    initialPose,
   };
 };
 
@@ -222,6 +237,79 @@ const missionDocumentToResponse = (missionDocument) => {
     createdAt: toIsoDate(missionDocument.createdAt),
     updatedAt: toIsoDate(missionDocument.updatedAt || missionDocument.createdAt),
   };
+};
+
+const missionDocumentToMobileResponse = (missionDocument, robotById, planByName) => {
+  const robot = robotById.get(missionDocument.robotId) || null;
+  const plan = planByName.get(missionDocument.planName) || null;
+  const metadata =
+    plan && plan.metadata && typeof plan.metadata === 'object' && !Array.isArray(plan.metadata)
+      ? plan.metadata
+      : null;
+  const points = Array.isArray(plan && plan.pois)
+    ? plan.pois.map((poi) => ({
+        x: Math.round(Number(poi.x) || 0),
+        y: Math.round(Number(poi.y) || 0),
+      }))
+    : [];
+  const poiIds = Array.isArray(plan && plan.pois)
+    ? plan.pois.map((poi) => String(poi.id))
+    : [];
+
+  return {
+    id: missionDocument.missionId,
+    name: missionDocument.planName,
+    description:
+      (metadata && typeof metadata.description === 'string' && metadata.description.trim()) ||
+      `Mission executee avec le plan "${missionDocument.planName}"`,
+    robotId: missionDocument.robotId,
+    robotName: robot ? robot.name : missionDocument.robotId,
+    mapId: missionDocument.mapName,
+    mapName: plan ? plan.mapName : missionDocument.mapName,
+    status: missionDocument.status || 'Pending',
+    priority:
+      (metadata && typeof metadata.priority === 'string' && metadata.priority.trim()) || 'medium',
+    createdAt: toIsoDate(missionDocument.createdAt),
+    poiIds,
+    points,
+  };
+};
+
+const buildMobileMissionResponses = async (missionDocuments) => {
+  const robotIds = Array.from(
+    new Set(
+      missionDocuments
+        .map((mission) => String(mission.robotId || '').trim())
+        .filter(Boolean)
+    )
+  );
+  const planNames = Array.from(
+    new Set(
+      missionDocuments
+        .map((mission) => String(mission.planName || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  const [robots, plans] = await Promise.all([
+    robotIds.length > 0
+      ? Robot.find({ robotId: { $in: robotIds } }).lean()
+      : Promise.resolve([]),
+    planNames.length > 0
+      ? MissionPlan.find({ planName: { $in: planNames } }).lean()
+      : Promise.resolve([]),
+  ]);
+
+  const robotById = new Map(
+    robots.map((robotDocument) => [robotDocument.robotId, robotDocument])
+  );
+  const planByName = new Map(
+    plans.map((planDocument) => [planDocument.planName, planDocument])
+  );
+
+  return missionDocuments.map((missionDocument) =>
+    missionDocumentToMobileResponse(missionDocument, robotById, planByName)
+  );
 };
 
 const missionLogDocumentToResponse = (logDocument) => {
@@ -448,6 +536,28 @@ const stopBridge = (req, res) => {
   res.json({ status: 'success', message: 'Stop Bridge publie' });
 };
 
+const startVideoStream = (req, res) => {
+  const { robotId } = req.body;
+
+  if (!robotId) {
+    return res.status(400).json({ error: 'robotId manquant' });
+  }
+
+  mqttService.publishSystemCommand(robotId, 'start_video_stream');
+  res.json({ status: 'success', message: 'Start Video Stream publie' });
+};
+
+const stopVideoStream = (req, res) => {
+  const { robotId } = req.body;
+
+  if (!robotId) {
+    return res.status(400).json({ error: 'robotId manquant' });
+  }
+
+  mqttService.publishSystemCommand(robotId, 'stop_video_stream');
+  res.json({ status: 'success', message: 'Stop Video Stream publie' });
+};
+
 const savePoiMap = async (req, res) => {
   try {
     const { mapName, metadata, pois } = req.body;
@@ -603,6 +713,29 @@ const startMission = async (req, res) => {
     const resolvedMissionId = missionId || `mission_${Date.now()}`;
     const pgmBuffer = fs.readFileSync(pgmPath);
     const yamlBuffer = fs.readFileSync(yamlPath);
+    const mapRecord = await MapModel.findOne({ mapName: resolvedMapBaseName }).lean();
+
+    const resolvedMetadata =
+      plan.metadata && typeof plan.metadata === 'object' && !Array.isArray(plan.metadata)
+        ? { ...plan.metadata }
+        : {};
+
+    if (
+      mapRecord &&
+      mapRecord.initialPose &&
+      Number.isFinite(mapRecord.initialPose.x) &&
+      Number.isFinite(mapRecord.initialPose.y)
+    ) {
+      resolvedMetadata.initialPose = {
+        x: Number(mapRecord.initialPose.x),
+        y: Number(mapRecord.initialPose.y),
+        yaw: Number(mapRecord.initialPose.yaw || 0),
+        capturedAt: mapRecord.initialPose.capturedAt
+          ? toIsoDate(mapRecord.initialPose.capturedAt)
+          : null,
+        source: mapRecord.initialPose.source || 'slam_start',
+      };
+    }
 
     const missionPayload = {
       missionId: resolvedMissionId,
@@ -613,7 +746,7 @@ const startMission = async (req, res) => {
         pgm: zlib.deflateSync(pgmBuffer).toString('base64'),
         yaml: zlib.deflateSync(yamlBuffer).toString('base64'),
       },
-      metadata: plan.metadata || null,
+      metadata: Object.keys(resolvedMetadata).length > 0 ? resolvedMetadata : null,
       pois: Array.isArray(plan.pois) ? plan.pois : [],
       createdAt: new Date().toISOString(),
     };
@@ -676,6 +809,42 @@ const listMissions = async (req, res) => {
   }
 };
 
+const listMissionsForMobileUser = async (req, res) => {
+  try {
+    const missions = await Mission.find()
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(await buildMobileMissionResponses(missions));
+  } catch (error) {
+    console.error('Erreur lecture missions mobile utilisateur:', error);
+    res
+      .status(500)
+      .json({ error: 'Erreur serveur lors de la lecture des missions mobile' });
+  }
+};
+
+const listMissionsForMobileRobot = async (req, res) => {
+  try {
+    const { robotId } = req.params;
+
+    if (!robotId) {
+      return res.status(400).json({ error: 'robotId manquant' });
+    }
+
+    const missions = await Mission.find({ robotId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(await buildMobileMissionResponses(missions));
+  } catch (error) {
+    console.error('Erreur lecture missions mobile robot:', error);
+    res
+      .status(500)
+      .json({ error: 'Erreur serveur lors de la lecture des missions du robot' });
+  }
+};
+
 const getMissionLogs = async (req, res) => {
   try {
     const { missionId } = req.params;
@@ -717,10 +886,14 @@ module.exports = {
   stopSlam,
   startBridge,
   stopBridge,
+  startVideoStream,
+  stopVideoStream,
   savePoiMap,
   getPoiMap,
   listPoiMaps,
   startMission,
   listMissions,
+  listMissionsForMobileUser,
+  listMissionsForMobileRobot,
   getMissionLogs,
 };

@@ -12,11 +12,12 @@ import threading
 
 import paho.mqtt.client as mqtt
 import actionlib
+import tf
 
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, Quaternion
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from sensor_msgs.msg import BatteryState
-from tf.transformations import quaternion_from_euler
+from tf.transformations import quaternion_from_euler, euler_from_quaternion
 
 MQTT_BROKER = "138.68.110.228"
 MQTT_PORT = 1883
@@ -30,6 +31,8 @@ cmd_pub = None
 mqtt_client_ref = None
 move_base_client = None
 last_battery_publish_time = 0.0
+slam_initial_pose = None
+tf_listener = None
 
 ROS_SETUP = "source /opt/ros/noetic/setup.bash"
 CATKIN_SETUP = "source ~/catkin_ws/devel/setup.bash"
@@ -245,14 +248,39 @@ def save_runtime_map(map_payload, mission_id):
     except Exception as e:
         raise Exception("Echec decompression map mission : " + str(e))
 
+    try:
+        yaml_text = yaml_data.decode("utf-8")
+    except Exception as e:
+        raise Exception("Echec lecture YAML mission : " + str(e))
+
     with open(pgm_path, "wb") as f:
         f.write(pgm_data)
 
+    yaml_lines = yaml_text.splitlines()
+    image_line_rewritten = False
+    sanitized_yaml_lines = []
+    runtime_image_reference = os.path.basename(pgm_path)
+
+    for line in yaml_lines:
+        if re.match(r"^\s*image\s*:", line):
+            indent_match = re.match(r"^(\s*)", line)
+            indent = indent_match.group(1) if indent_match else ""
+            sanitized_yaml_lines.append("{}image: {}".format(indent, runtime_image_reference))
+            image_line_rewritten = True
+        else:
+            sanitized_yaml_lines.append(line)
+
+    if not image_line_rewritten:
+        sanitized_yaml_lines.insert(0, "image: {}".format(runtime_image_reference))
+
+    yaml_text = "\n".join(sanitized_yaml_lines) + "\n"
+
     with open(yaml_path, "wb") as f:
-        f.write(yaml_data)
+        f.write(yaml_text.encode("utf-8"))
 
     rospy.loginfo("Map mission ecrite localement : " + pgm_path)
     rospy.loginfo("YAML mission ecrit localement : " + yaml_path)
+    rospy.loginfo("YAML mission image re-ecrite vers : " + runtime_image_reference)
 
     return {
         "map_name": safe_map_name,
@@ -291,6 +319,59 @@ def publish_initial_pose(x, y, yaw):
 
     pub.publish(msg)
     rospy.loginfo("Pose initiale publiee sur /initialpose")
+
+
+def lookup_robot_pose_in_map(timeout_seconds=20.0):
+    global tf_listener
+
+    if tf_listener is None:
+        return None
+
+    deadline = time.time() + timeout_seconds
+    candidate_frames = ["base_footprint", "base_link"]
+
+    while not rospy.is_shutdown() and time.time() < deadline:
+        for base_frame in candidate_frames:
+            try:
+                tf_listener.waitForTransform("map", base_frame, rospy.Time(0), rospy.Duration(1.0))
+                translation, rotation = tf_listener.lookupTransform("map", base_frame, rospy.Time(0))
+                yaw = euler_from_quaternion(rotation)[2]
+                return {
+                    "x": float(translation[0]),
+                    "y": float(translation[1]),
+                    "yaw": float(yaw),
+                    "capturedAt": datetime.datetime.utcnow().isoformat() + "Z",
+                    "source": "slam_start",
+                }
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                continue
+
+        time.sleep(0.2)
+
+    return None
+
+
+def capture_slam_initial_pose_after_startup(startup_delay=5.0):
+    global slam_initial_pose
+
+    time.sleep(startup_delay)
+    pose = lookup_robot_pose_in_map(timeout_seconds=20.0)
+
+    if pose is None:
+        rospy.logwarn("Impossible de capturer la pose initiale de cartographie sur la frame map.")
+        return
+
+    slam_initial_pose = pose
+    rospy.loginfo(
+        "Pose initiale SLAM capturee | x=%.3f y=%.3f yaw=%.3f" %
+        (pose["x"], pose["y"], pose["yaw"])
+    )
+
+
+def schedule_slam_initial_pose_capture():
+    capture_thread = threading.Thread(target=capture_slam_initial_pose_after_startup)
+    capture_thread.daemon = True
+    capture_thread.start()
 
 
 def send_goal_to_move_base(x, y, yaw):
@@ -390,6 +471,8 @@ def execute_mission(payload):
     rospy.loginfo("Carte : " + map_name)
 
     runtime_map_info = save_runtime_map(map_payload, mission_id)
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    initial_pose = metadata.get("initialPose") if isinstance(metadata, dict) else None
 
     pois = payload.get("pois", [])
     rospy.loginfo("Nombre de POI : " + str(len(pois)))
@@ -417,8 +500,21 @@ def execute_mission(payload):
         publish_mission_log("Navigation indisponible", level="error")
         return
 
-    rospy.logwarn("Important : le robot doit etre dans le bon environnement et localise sur la map.")
-    rospy.logwarn("Si la pose initiale n'est pas connue, move_base risque d'echouer.")
+    if isinstance(initial_pose, dict):
+        try:
+            initial_x = float(initial_pose.get("x", 0.0))
+            initial_y = float(initial_pose.get("y", 0.0))
+            initial_yaw = float(initial_pose.get("yaw", 0.0))
+            publish_initial_pose(initial_x, initial_y, initial_yaw)
+            publish_mission_log(
+                "Pose initiale publiee",
+                extra={"x": initial_x, "y": initial_y, "yaw": initial_yaw}
+            )
+            time.sleep(3.0)
+        except Exception as error:
+            rospy.logwarn("Erreur publication pose initiale : " + str(error))
+    else:
+        rospy.logwarn("Aucune pose initiale definie pour cette carte. La localisation peut echouer.")
 
     total_pois = len(pois)
 
@@ -466,7 +562,7 @@ def execute_mission(payload):
 
 
 def on_message(client, userdata, msg):
-    global cmd_pub
+    global cmd_pub, slam_initial_pose
 
     try:
         payload = json.loads(msg.payload.decode('utf-8'))
@@ -489,21 +585,25 @@ def on_message(client, userdata, msg):
             rospy.loginfo("Commande systeme recue : " + str(action))
 
             if action == "start_slam":
+                slam_initial_pose = None
                 cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false"
                 run_shell_background(cmd, "/tmp/slam.log")
                 rospy.loginfo("Process SLAM demarre localement.")
+                schedule_slam_initial_pose_capture()
 
             elif action == "stop_slam":
                 run_shell("pkill -f turtlebot3_slam")
                 rospy.loginfo("Process SLAM arrete.")
 
             elif action == "reset_slam":
+                slam_initial_pose = None
                 run_shell("pkill -f turtlebot3_slam")
                 rospy.loginfo("Arret du SLAM. Attente de 4 secondes pour liberer le roscore...")
                 time.sleep(4)
                 cmd = ENV_PREFIX + " && roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping open_rviz:=false"
                 run_shell_background(cmd, "/tmp/slam.log")
                 rospy.loginfo("Process SLAM redemarre.")
+                schedule_slam_initial_pose_capture()
 
             elif action == "start_bridge":
                 cmd = ENV_PREFIX + " && roslaunch rosbridge_server rosbridge_websocket.launch"
@@ -561,7 +661,8 @@ def on_message(client, userdata, msg):
                     upload_payload = json.dumps({
                         "mapName": base_name,
                         "pgm": pgm_b64,
-                        "yaml": yaml_b64
+                        "yaml": yaml_b64,
+                        "initialPose": slam_initial_pose
                     })
 
                     client.publish(upload_topic, upload_payload, qos=1)
@@ -575,11 +676,12 @@ def on_message(client, userdata, msg):
 
 
 def main():
-    global cmd_pub, mqtt_client_ref
+    global cmd_pub, mqtt_client_ref, tf_listener
 
     rospy.init_node('mqtt_ros_bridge', anonymous=True)
     cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
     rospy.Subscriber('/battery_state', BatteryState, on_battery_state, queue_size=10)
+    tf_listener = tf.TransformListener()
 
     ensure_bringup()
 

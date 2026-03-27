@@ -31,6 +31,28 @@ const inferRobotType = (robotId) => {
   return 'unknown';
 };
 
+const normalizeInitialPose = (initialPose) => {
+  if (!initialPose || typeof initialPose !== 'object') {
+    return null;
+  }
+
+  const x = Number(initialPose.x);
+  const y = Number(initialPose.y);
+  const yaw = Number(initialPose.yaw ?? 0);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(yaw)) {
+    return null;
+  }
+
+  return {
+    x,
+    y,
+    yaw,
+    capturedAt: initialPose.capturedAt ? new Date(initialPose.capturedAt) : new Date(),
+    source: initialPose.source ? String(initialPose.source) : 'slam_start',
+  };
+};
+
 const upsertRobotStatus = async (robotId, status) => {
   if (!robotId) {
     return;
@@ -56,18 +78,25 @@ const upsertRobotStatus = async (robotId, status) => {
   );
 };
 
-const upsertMapMetadata = async (robotId, mapName) => {
+const upsertMapMetadata = async (robotId, mapName, extra = {}) => {
   if (!mapName) {
     return;
+  }
+
+  const update = {
+    robotId: robotId || 'unknown',
+    apiPath: `/maps/${mapName}`,
+  };
+
+  const normalizedInitialPose = normalizeInitialPose(extra.initialPose);
+  if (normalizedInitialPose) {
+    update.initialPose = normalizedInitialPose;
   }
 
   await MapModel.findOneAndUpdate(
     { mapName },
     {
-      $set: {
-        robotId: robotId || 'unknown',
-        apiPath: `/maps/${mapName}`,
-      },
+      $set: update,
       $setOnInsert: {
         createdAt: new Date(),
       },
@@ -222,7 +251,7 @@ const handleRobotTelemetry = async (robotId, message) => {
 
 const handleMapUpload = async (robotId, message) => {
   const payload = JSON.parse(message.toString());
-  const { mapName, pgm, yaml } = payload;
+  const { mapName, pgm, yaml, initialPose } = payload;
 
   const targetDir = path.join(__dirname, '../../public/maps');
 
@@ -236,7 +265,7 @@ const handleMapUpload = async (robotId, message) => {
   fs.writeFileSync(path.join(targetDir, `${mapName}.pgm`), pgmBuffer);
   fs.writeFileSync(path.join(targetDir, `${mapName}.yaml`), yamlBuffer);
 
-  await upsertMapMetadata(robotId, mapName);
+  await upsertMapMetadata(robotId, mapName, { initialPose });
 
   console.log(`[MQTT] Carte "${mapName}" recue, decompressee et sauvegardee.`);
 };

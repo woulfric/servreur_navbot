@@ -23,8 +23,8 @@ const startServer = async () => {
         app.use('/api', apiRoutes);
 
         // Lancement Serveur
-        app.listen(PORT, () => {
-            console.log(`Serveur NavBot lancé sur http://localhost:${PORT}`);
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Serveur NavBot lancé sur http://0.0.0.0:${PORT}`);
         });
     } catch (error) {
         console.error('Impossible de démarrer le serveur:', error.message);
