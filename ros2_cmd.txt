@@ -72,3 +72,10 @@ backend firebase :
 
 cd /home/woulfric/serveur_navbot/app_mobile/robotbackend
 ./mvnw spring-boot:run
+
+
+
+user app mobile: 
+
+kamel.yennek@edu.univ-eiffel.fr
+Navbot006
