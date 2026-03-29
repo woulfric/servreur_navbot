@@ -13,6 +13,7 @@ import threading
 import paho.mqtt.client as mqtt
 import actionlib
 import tf
+import tf2_ros
 
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, Quaternion
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
@@ -343,7 +344,12 @@ def lookup_robot_pose_in_map(timeout_seconds=20.0):
                     "capturedAt": datetime.datetime.utcnow().isoformat() + "Z",
                     "source": "slam_start",
                 }
-            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            except (
+                tf.LookupException,
+                tf.ConnectivityException,
+                tf.ExtrapolationException,
+                tf2_ros.TransformException
+            ):
                 continue
 
         time.sleep(0.2)
@@ -355,7 +361,11 @@ def capture_slam_initial_pose_after_startup(startup_delay=5.0):
     global slam_initial_pose
 
     time.sleep(startup_delay)
-    pose = lookup_robot_pose_in_map(timeout_seconds=20.0)
+    try:
+        pose = lookup_robot_pose_in_map(timeout_seconds=20.0)
+    except Exception as error:
+        rospy.logwarn("Erreur capture pose initiale SLAM : " + str(error))
+        return
 
     if pose is None:
         rospy.logwarn("Impossible de capturer la pose initiale de cartographie sur la frame map.")

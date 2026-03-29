@@ -1,10 +1,21 @@
 import React, { createContext, useEffect, useMemo, useState } from 'react';
 
 export const RobotContext = createContext();
+const SELECTED_ROBOT_STORAGE_KEY = 'navbot.selectedRobotId';
+
+const readStoredSelectedRobotId = () => {
+  try {
+    const storedRobotId = localStorage.getItem(SELECTED_ROBOT_STORAGE_KEY);
+    return storedRobotId || null;
+  } catch (error) {
+    console.warn('Impossible de lire le robot selectionne depuis le stockage local.', error);
+    return null;
+  }
+};
 
 export const RobotProvider = ({ children }) => {
   const [robots, setRobots] = useState([]);
-  const [selectedRobotId, setSelectedRobotId] = useState(null);
+  const [selectedRobotId, setSelectedRobotId] = useState(readStoredSelectedRobotId);
 
   const fetchRobots = async () => {
     try {
@@ -34,6 +45,18 @@ export const RobotProvider = ({ children }) => {
     const interval = setInterval(fetchRobots, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    try {
+      if (selectedRobotId) {
+        localStorage.setItem(SELECTED_ROBOT_STORAGE_KEY, selectedRobotId);
+      } else {
+        localStorage.removeItem(SELECTED_ROBOT_STORAGE_KEY);
+      }
+    } catch (error) {
+      console.warn('Impossible de sauvegarder le robot selectionne dans le stockage local.', error);
+    }
+  }, [selectedRobotId]);
 
   const activeRobots = useMemo(() => {
     return robots.filter((robot) => robot.status === 'online');
