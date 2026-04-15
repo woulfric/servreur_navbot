@@ -104,7 +104,6 @@ Après avoir chargé l’environnement ROS 1 :
 source /opt/ros/noetic/setup.bash
 source ~/catkin_ws/devel/setup.bash
 export TURTLEBOT3_MODEL=burger
-roscore
 roslaunch turtlebot3_bringup turtlebot3_robot.launch
 python3 "Script Mqtt/mqtt_ros_bridge.py"
 ```
@@ -116,8 +115,3 @@ python3 "Script Mqtt/mqtt_ros_bridge.py"
 - la communication avec les robots passe principalement par MQTT
 - certaines fonctionnalités dépendent du bon démarrage des services ROS sur le robot
 
-## Limites connues
-
-- certaines URLs et paramètres réseau restent liés à l’environnement de test
-- le projet suppose que le backend, le frontend et le robot puissent communiquer correctement sur le réseau
-- certaines pages de l’interface sont plus avancées que d’autres et toutes ne sont pas au même niveau de finalisation
